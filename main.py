@@ -3,7 +3,6 @@ import json
 import os
 import random
 from pathlib import Path
-from copy import deepcopy
 
 SAVE_FILE = Path('save.json')
 PORT = int(os.getenv('PORT', '8080'))
@@ -13,6 +12,7 @@ TEAMS_PER_DIV = 10
 DIVISIONS = 3
 SQUAD_SIZE = 18
 WEEKS_PER_SEASON = (TEAMS_PER_DIV - 1) * 2  # 18
+MAX_SQUAD_SIZE = 24
 
 COUNTRIES = {
     'England': {
@@ -89,6 +89,10 @@ def make_club_name(country_data, used_names):
     return fallback
 
 
+def average_attrs(attrs):
+    return round(sum(attrs.values()) / len(attrs))
+
+
 def generate_player(country_name, club_name, idx):
     country_data = COUNTRIES[country_name]
     pos = POS_SEQUENCE[idx % len(POS_SEQUENCE)]
@@ -108,10 +112,13 @@ def generate_player(country_name, club_name, idx):
         bias = country_data['bias'][k]
         attrs[k] = clamp(int(random.randint(v - 8, v + 8) * bias), 35, 90)
 
-    overall = round(sum(attrs.values()) / len(attrs))
+    overall = average_attrs(attrs)
     potential = clamp(overall + random.randint(0, 15), overall, 94)
+    value = int(overall * overall * 900 + potential * 2500 + random.randint(-10000, 10000))
+    wage = int(overall * 85 + random.randint(200, 1200))
 
     return {
+        'id': f'{club_name}_{idx}_{random.randint(1000, 9999)}',
         'name': make_name(country_data),
         'age': age,
         'nationality': country_name,
@@ -122,6 +129,9 @@ def generate_player(country_name, club_name, idx):
         'potential': potential,
         'stamina': random.randint(85, 100),
         'morale': random.randint(55, 75),
+        'value': max(30000, value),
+        'wage': max(800, wage),
+        'transfer_listed': False,
     }
 
 
@@ -164,6 +174,16 @@ def round_robin_schedule(team_names):
     return rounds + second_half
 
 
+def create_scout_pool(country_name, n=8):
+    pool = []
+    for i in range(n):
+        player = generate_player(country_name, 'Scout Pool', i)
+        player['value'] = int(player['value'] * random.uniform(0.8, 1.15))
+        player['wage'] = int(player['wage'] * random.uniform(0.85, 1.1))
+        pool.append(player)
+    return pool
+
+
 def build_world(selected_country):
     country_data = COUNTRIES[selected_country]
     used_names = set()
@@ -185,8 +205,11 @@ def build_world(selected_country):
         'week': 1,
         'selected_country': selected_country,
         'selected_club': '',
+        'selected_player_id': '',
         'news': [f'Created new world in {selected_country}.'],
         'divisions': divisions,
+        'scout_pool': create_scout_pool(selected_country, 10),
+        'transfer_offers': [],
     }
 
 
@@ -195,6 +218,26 @@ def get_team(game_state, team_name):
         for team in div['teams']:
             if team['name'] == team_name:
                 return team
+    return None
+
+
+def get_selected_team():
+    if not game_state['selected_club']:
+        return None
+    return get_team(game_state, game_state['selected_club'])
+
+
+def get_player_by_id(player_id):
+    if not player_id:
+        return None
+    for div in game_state['divisions'].values():
+        for team in div['teams']:
+            for p in team['players']:
+                if p['id'] == player_id:
+                    return p
+    for p in game_state.get('scout_pool', []):
+        if p['id'] == player_id:
+            return p
     return None
 
 
@@ -280,6 +323,12 @@ def sort_table(teams):
     )
 
 
+def recompute_player_derived(player):
+    player['overall'] = average_attrs(player['attrs'])
+    player['value'] = max(30000, int(player['overall'] * player['overall'] * 900 + player['potential'] * 2500 + random.randint(-8000, 8000)))
+    player['wage'] = max(800, int(player['overall'] * 85 + random.randint(150, 900)))
+
+
 def season_rollover(game_state):
     div1 = sort_table(game_state['divisions']['1']['teams'])
     div2 = sort_table(game_state['divisions']['2']['teams'])
@@ -314,24 +363,51 @@ def season_rollover(game_state):
             for p in t['players']:
                 p['age'] += 1
                 if p['age'] <= 23 and p['overall'] < p['potential'] and random.random() < 0.45:
-                    p['overall'] += random.randint(0, 2)
+                    for k in p['attrs']:
+                        if random.random() < 0.4:
+                            p['attrs'][k] = clamp(p['attrs'][k] + random.randint(0, 2), 35, 95)
                 elif p['age'] >= 30 and random.random() < 0.35:
-                    p['overall'] = max(45, p['overall'] - random.randint(0, 2))
+                    for k in p['attrs']:
+                        if random.random() < 0.35:
+                            p['attrs'][k] = clamp(p['attrs'][k] - random.randint(0, 1), 35, 95)
 
-                for k in p['attrs']:
-                    if p['age'] <= 23 and random.random() < 0.35:
-                        p['attrs'][k] = clamp(p['attrs'][k] + random.randint(0, 1), 35, 95)
-                    elif p['age'] >= 30 and random.random() < 0.25:
-                        p['attrs'][k] = clamp(p['attrs'][k] - random.randint(0, 1), 35, 95)
-
+                recompute_player_derived(p)
                 p['stamina'] = random.randint(88, 100)
                 p['morale'] = clamp(p['morale'] + random.randint(-3, 6), 40, 95)
 
         game_state['divisions'][div_key]['schedule'] = round_robin_schedule([t['name'] for t in teams])
 
+    game_state['scout_pool'] = create_scout_pool(game_state['selected_country'], 10)
+    game_state['transfer_offers'] = []
     game_state['season'] += 1
     game_state['week'] = 1
     game_state['news'].insert(0, 'Season ended. Promotion and relegation applied.')
+
+
+def generate_transfer_offers():
+    selected = get_selected_team()
+    if not selected:
+        return
+    offers = []
+    listed = [p for p in selected['players'] if p.get('transfer_listed')]
+    ai_teams = []
+    for div in game_state['divisions'].values():
+        for t in div['teams']:
+            if t['name'] != selected['name']:
+                ai_teams.append(t)
+
+    for p in listed:
+        if random.random() < 0.45:
+            buyer = random.choice(ai_teams)
+            fee = int(p['value'] * random.uniform(0.85, 1.25))
+            offers.append({
+                'player_id': p['id'],
+                'player_name': p['name'],
+                'buyer': buyer['name'],
+                'fee': fee,
+            })
+
+    game_state['transfer_offers'] = offers
 
 
 def play_next_week(game_state):
@@ -342,7 +418,7 @@ def play_next_week(game_state):
         season_rollover(game_state)
         return 'New season started.'
 
-    selected_team = get_team(game_state, game_state['selected_club'])
+    selected_team = get_selected_team()
     if not selected_team:
         return 'Selected club not found.'
 
@@ -365,6 +441,7 @@ def play_next_week(game_state):
                 selected_team['fans'] += random.randint(20, 120)
 
     recover_between_weeks(game_state)
+    generate_transfer_offers()
     game_state['week'] += 1
 
     if logs:
@@ -375,6 +452,103 @@ def play_next_week(game_state):
         season_rollover(game_state)
 
     return 'Week processed.'
+
+
+def refresh_scout_pool():
+    game_state['scout_pool'] = create_scout_pool(game_state['selected_country'], 10)
+    game_state['news'].insert(0, 'Scout pool refreshed.')
+    refresh_ui()
+
+
+def sign_scout_player(player_id):
+    selected = get_selected_team()
+    if not selected:
+        ui.notify('Choose a club first')
+        return
+
+    player = None
+    for p in game_state['scout_pool']:
+        if p['id'] == player_id:
+            player = p
+            break
+
+    if not player:
+        ui.notify('Player not found')
+        return
+
+    fee = player['value']
+    if selected['budget'] < fee:
+        ui.notify('Not enough budget')
+        return
+    if len(selected['players']) >= MAX_SQUAD_SIZE:
+        ui.notify('Squad is full')
+        return
+
+    selected['budget'] -= fee
+    player['club'] = selected['name']
+    selected['players'].append(player)
+    game_state['scout_pool'] = [p for p in game_state['scout_pool'] if p['id'] != player_id]
+    game_state['news'].insert(0, f"Signed {player['name']} for ${fee:,}")
+    refresh_ui()
+
+
+def release_player(player_id):
+    selected = get_selected_team()
+    if not selected:
+        return
+    if len(selected['players']) <= 11:
+        ui.notify('You need at least 11 players')
+        return
+    target = get_player_by_id(player_id)
+    if not target or target['club'] != selected['name']:
+        return
+    selected['players'] = [p for p in selected['players'] if p['id'] != player_id]
+    game_state['news'].insert(0, f"Released {target['name']}")
+    if game_state.get('selected_player_id') == player_id:
+        game_state['selected_player_id'] = ''
+    refresh_ui()
+
+
+def toggle_transfer_list(player_id):
+    p = get_player_by_id(player_id)
+    selected = get_selected_team()
+    if not p or not selected or p['club'] != selected['name']:
+        return
+    p['transfer_listed'] = not p.get('transfer_listed', False)
+    state = 'listed' if p['transfer_listed'] else 'removed from list'
+    game_state['news'].insert(0, f"{p['name']} {state}.")
+    refresh_ui()
+
+
+def accept_transfer_offer(player_id):
+    selected = get_selected_team()
+    if not selected:
+        return
+    offer = None
+    for o in game_state['transfer_offers']:
+        if o['player_id'] == player_id:
+            offer = o
+            break
+    if not offer:
+        ui.notify('Offer not found')
+        return
+    if len(selected['players']) <= 11:
+        ui.notify('You need at least 11 players')
+        return
+
+    selected['players'] = [p for p in selected['players'] if p['id'] != player_id]
+    selected['budget'] += offer['fee']
+    game_state['transfer_offers'] = [o for o in game_state['transfer_offers'] if o['player_id'] != player_id]
+    if game_state.get('selected_player_id') == player_id:
+        game_state['selected_player_id'] = ''
+    game_state['news'].insert(0, f"Sold {offer['player_name']} to {offer['buyer']} for ${offer['fee']:,}")
+    refresh_ui()
+
+
+def reject_transfer_offer(player_id):
+    game_state['transfer_offers'] = [o for o in game_state['transfer_offers'] if o['player_id'] != player_id]
+    game_state['news'].insert(0, 'Rejected a transfer offer.')
+    refresh_ui()
 
 
 def save_game(game_state):
@@ -419,15 +593,22 @@ def set_team_tactic(team_name, tactic_name):
 
 game_state = build_world('England')
 
-# ---------------- UI refs ----------------
 country_select = None
 club_select = None
+
 status_container = None
 dashboard_container = None
 squad_container = None
+player_detail_container = None
 match_container = None
 standings_container = None
+scout_container = None
+transfer_container = None
 save_container = None
+
+
+def player_label(p):
+    return f"{p['name']} | {p['pos']} | OVR {p['overall']}"
 
 
 def render_status():
@@ -443,20 +624,24 @@ def render_status():
 def render_dashboard():
     dashboard_container.clear()
     with dashboard_container:
-        selected = get_team(game_state, game_state['selected_club']) if game_state['selected_club'] else None
-
+        selected = get_selected_team()
         if not selected:
             ui.label('Choose a club first from the selector above.')
             return
 
+        ordered = sort_table(game_state['divisions'][str(selected['division'])]['teams'])
+        rank = next((i + 1 for i, t in enumerate(ordered) if t['name'] == selected['name']), '-')
+        avg_overall = round(sum(p['overall'] for p in selected['players']) / len(selected['players']), 1)
+        wage_bill = sum(p['wage'] for p in selected['players'])
+
         with ui.card().classes('w-full'):
             ui.label(selected['name']).classes('text-h6')
-            ui.label(f"Division: {selected['division']}")
+            ui.label(f"Division: {selected['division']} | Rank: {rank}/{len(ordered)}")
             ui.label(f"Budget: ${selected['budget']:,}")
             ui.label(f"Fans: {selected['fans']:,}")
-            ui.label(f"Tactic: {selected['tactic']}")
-            avg_overall = round(sum(p['overall'] for p in selected['players']) / len(selected['players']), 1)
             ui.label(f"Squad Avg: {avg_overall}")
+            ui.label(f"Weekly Wage Bill: ${wage_bill:,}")
+            ui.label(f"Tactic: {selected['tactic']}")
 
         with ui.card().classes('w-full'):
             ui.label('Recent News').classes('text-subtitle1')
@@ -467,8 +652,7 @@ def render_dashboard():
 def render_squad():
     squad_container.clear()
     with squad_container:
-        selected = get_team(game_state, game_state['selected_club']) if game_state['selected_club'] else None
-
+        selected = get_selected_team()
         if not selected:
             ui.label('Choose a club first.')
             return
@@ -481,19 +665,46 @@ def render_squad():
                 on_change=lambda e: set_team_tactic(selected['name'], e.value),
             ).classes('w-full')
 
-        ui.label('Players').classes('text-subtitle1')
+        ui.label('Squad').classes('text-subtitle1')
         for p in sorted(selected['players'], key=lambda x: (x['pos'], -x['overall'])):
             with ui.card().classes('w-full'):
                 ui.label(f"{p['name']} | {p['pos']} | OVR {p['overall']} | POT {p['potential']}")
-                ui.label(f"Age {p['age']} | STA {p['stamina']} | MOR {p['morale']}")
-                attrs = ' / '.join(f'{k}:{v}' for k, v in p['attrs'].items())
-                ui.label(attrs).classes('text-caption')
+                ui.label(f"Age {p['age']} | STA {p['stamina']} | MOR {p['morale']} | Value ${p['value']:,}")
+                row = ui.row().classes('w-full')
+                with row:
+                    ui.button('Detail', on_click=lambda _, pid=p['id']: select_player(pid)).props('dense')
+                    ui.button(
+                        'Unlist' if p.get('transfer_listed') else 'List',
+                        on_click=lambda _, pid=p['id']: toggle_transfer_list(pid)
+                    ).props('dense')
+                    ui.button('Release', on_click=lambda _, pid=p['id']: release_player(pid)).props('dense color=negative')
+
+        ui.separator()
+        ui.label('Player Detail').classes('text-subtitle1')
+        with ui.card().classes('w-full'):
+            player_detail_container.clear()
+            with player_detail_container:
+                selected_player = get_player_by_id(game_state.get('selected_player_id'))
+                if selected_player:
+                    render_player_detail_content(selected_player)
+                else:
+                    ui.label('Tap Detail on a player.')
+
+
+def render_player_detail_content(player):
+    ui.label(f"{player['name']}").classes('text-h6')
+    ui.label(f"{player['pos']} | Age {player['age']} | {player['nationality']}")
+    ui.label(f"OVR {player['overall']} | POT {player['potential']}")
+    ui.label(f"Value ${player['value']:,} | Wage ${player['wage']:,}")
+    ui.label(f"Stamina {player['stamina']} | Morale {player['morale']}")
+    for k, v in player['attrs'].items():
+        ui.label(f'{k}: {v}')
 
 
 def render_match():
     match_container.clear()
     with match_container:
-        selected = get_team(game_state, game_state['selected_club']) if game_state['selected_club'] else None
+        selected = get_selected_team()
         if not selected:
             ui.label('Choose a club first.')
             return
@@ -534,6 +745,58 @@ def render_standings():
                     ui.label(row).classes('text-body2')
 
 
+def render_scout():
+    scout_container.clear()
+    with scout_container:
+        selected = get_selected_team()
+        if not selected:
+            ui.label('Choose a club first.')
+            return
+
+        with ui.card().classes('w-full'):
+            ui.label('Scout Market').classes('text-subtitle1')
+            ui.button('Refresh Scouts', on_click=refresh_scout_pool).classes('w-full')
+            ui.label(f"Budget: ${selected['budget']:,}")
+
+        for p in sorted(game_state['scout_pool'], key=lambda x: (-x['overall'], x['age'])):
+            with ui.card().classes('w-full'):
+                ui.label(f"{p['name']} | {p['pos']} | OVR {p['overall']} | POT {p['potential']}")
+                ui.label(f"Age {p['age']} | {p['nationality']} | Value ${p['value']:,} | Wage ${p['wage']:,}")
+                ui.label(' / '.join(f'{k}:{v}' for k, v in p['attrs'].items())).classes('text-caption')
+                with ui.row():
+                    ui.button('Detail', on_click=lambda _, pid=p['id']: select_player(pid)).props('dense')
+                    ui.button('Sign', on_click=lambda _, pid=p['id']: sign_scout_player(pid)).props('dense color=positive')
+
+
+def render_transfer():
+    transfer_container.clear()
+    with transfer_container:
+        selected = get_selected_team()
+        if not selected:
+            ui.label('Choose a club first.')
+            return
+
+        with ui.card().classes('w-full'):
+            ui.label('Transfer List').classes('text-subtitle1')
+            listed = [p for p in selected['players'] if p.get('transfer_listed')]
+            if not listed:
+                ui.label('No players listed.')
+            else:
+                for p in listed:
+                    ui.label(f"{p['name']} | {p['pos']} | OVR {p['overall']} | Asking Value ${p['value']:,}")
+
+        with ui.card().classes('w-full'):
+            ui.label('Incoming Offers').classes('text-subtitle1')
+            if not game_state['transfer_offers']:
+                ui.label('No offers this week.')
+            else:
+                for o in game_state['transfer_offers']:
+                    with ui.row().classes('w-full items-center'):
+                        ui.label(f"{o['player_name']} ← {o['buyer']} | ${o['fee']:,}")
+                        ui.button('Accept', on_click=lambda _, pid=o['player_id']: accept_transfer_offer(pid)).props('dense color=positive')
+                        ui.button('Reject', on_click=lambda _, pid=o['player_id']: reject_transfer_offer(pid)).props('dense color=negative')
+
+
 def render_save():
     save_container.clear()
     with save_container:
@@ -543,6 +806,11 @@ def render_save():
             ui.button('Load', on_click=load_game).classes('w-full')
             ui.button('Export JSON', on_click=export_save).classes('w-full')
             ui.upload(on_upload=import_save, label='Import JSON').classes('w-full')
+
+
+def select_player(player_id):
+    game_state['selected_player_id'] = player_id
+    refresh_ui()
 
 
 def refresh_ui():
@@ -556,7 +824,9 @@ def refresh_ui():
 
     club_select.options = clubs
     if game_state['selected_club']:
-        club_select.value = f"Div {get_team(game_state, game_state['selected_club'])['division']} | {game_state['selected_club']}"
+        team = get_team(game_state, game_state['selected_club'])
+        if team:
+            club_select.value = f"Div {team['division']} | {team['name']}"
     else:
         club_select.value = None
 
@@ -565,6 +835,8 @@ def refresh_ui():
     render_squad()
     render_match()
     render_standings()
+    render_scout()
+    render_transfer()
     render_save()
 
 
@@ -620,6 +892,8 @@ with ui.tabs().classes('w-full') as tabs:
     t_squad = ui.tab('Squad')
     t_match = ui.tab('Match')
     t_standings = ui.tab('Standings')
+    t_scout = ui.tab('Scout')
+    t_transfer = ui.tab('Transfer')
     t_save = ui.tab('Save')
 
 with ui.tab_panels(tabs, value=t_dashboard).classes('w-full'):
@@ -627,10 +901,15 @@ with ui.tab_panels(tabs, value=t_dashboard).classes('w-full'):
         dashboard_container = ui.column().classes('w-full')
     with ui.tab_panel(t_squad):
         squad_container = ui.column().classes('w-full')
+        player_detail_container = ui.column().classes('w-full')
     with ui.tab_panel(t_match):
         match_container = ui.column().classes('w-full')
     with ui.tab_panel(t_standings):
         standings_container = ui.column().classes('w-full')
+    with ui.tab_panel(t_scout):
+        scout_container = ui.column().classes('w-full')
+    with ui.tab_panel(t_transfer):
+        transfer_container = ui.column().classes('w-full')
     with ui.tab_panel(t_save):
         save_container = ui.column().classes('w-full')
 
