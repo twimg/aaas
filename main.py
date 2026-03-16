@@ -73,7 +73,6 @@ POS_SEQUENCE = ['GK', 'DF', 'DF', 'DF', 'DF', 'MF', 'MF', 'MF', 'MF', 'FW', 'FW'
 nav_state = {'section': 'dashboard'}
 
 country_select = None
-club_select = None
 club_picker_container = None
 status_container = None
 content_container = None
@@ -187,6 +186,28 @@ def create_sponsor(country_name, division):
     }
 
 
+def make_sponsor_offer(country_name, division, current_sponsor=None):
+    sponsor_names = {
+        'England': ['Skyline Works', 'Union Media', 'Harbor Trade', 'Cobalt Finance'],
+        'Brazil': ['Rio Motion', 'Samba Drinks', 'Sol Group', 'Atlante Foods'],
+        'Germany': ['Nord Stahl', 'Rhein Mobile', 'Kaiser Tech', 'Berg Trade'],
+        'Spain': ['Costa Vision', 'Iberia Foods', 'Valle Systems', 'Roja Energy'],
+        'Italy': ['Milano Mode', 'Roma Capital', 'Verona Foods', 'Lazio Systems'],
+        'Japan': ['Hikari Systems', 'Shion Foods', 'Aoba Capital', 'Kouga Logistics'],
+    }
+    name = random.choice(sponsor_names[country_name])
+    if current_sponsor and name == current_sponsor.get('name'):
+        name += ' Plus'
+
+    return {
+        'name': name,
+        'weekly_income': max(8000, {1: 46000, 2: 29000, 3: 19000}[division] + random.randint(-8000, 12000)),
+        'win_bonus': random.randint(5000, 15000),
+        'season_bonus': max(50000, {1: 240000, 2: 150000, 3: 100000}[division] + random.randint(-40000, 50000)),
+        'target_rank': max(1, {1: 5, 2: 4, 3: 3}[division] + random.choice([-1, 0, 1])),
+    }
+
+
 def create_team(country_name, club_name, division):
     base_rep = {1: 72, 2: 64, 3: 57}[division]
     players = [generate_player(country_name, club_name, i) for i in range(SQUAD_SIZE)]
@@ -251,14 +272,13 @@ def init_cup(div1_teams):
 
 
 def build_world(selected_country):
-    country_data = COUNTRIES[selected_country]
     used_names = set()
     divisions = {}
 
     for div in range(1, DIVISIONS + 1):
         teams = []
         for _ in range(TEAMS_PER_DIV):
-            club_name = make_club_name(country_data, used_names)
+            club_name = make_club_name(COUNTRIES[selected_country], used_names)
             teams.append(create_team(selected_country, club_name, div))
         divisions[str(div)] = {
             'name': f'{selected_country} Division {div}',
@@ -278,6 +298,9 @@ def build_world(selected_country):
         'transfer_offers': [],
         'cup': init_cup(divisions['1']['teams']),
         'finance_history': [],
+        'last_match_result': '',
+        'last_match_events': [],
+        'sponsor_offer': None,
     }
 
 
@@ -409,6 +432,32 @@ def simulate_match(team_a, team_b, cup=False):
     return ga, gb
 
 
+def build_match_events(team_a, team_b, ga, gb):
+    events = []
+    minute_pool = random.sample(range(5, 91), k=max(1, ga + gb))
+    minute_pool.sort()
+
+    home_players = [p for p in available_lineup(team_a) if p['pos'] != 'GK'] or available_lineup(team_a)
+    away_players = [p for p in available_lineup(team_b) if p['pos'] != 'GK'] or available_lineup(team_b)
+
+    for i in range(ga):
+        scorer = random.choice(home_players) if home_players else {'name': 'Unknown'}
+        minute = minute_pool[min(i, len(minute_pool) - 1)]
+        events.append(f'{minute}分 {team_a["name"]}: {scorer["name"]} が得点')
+    for j in range(gb):
+        scorer = random.choice(away_players) if away_players else {'name': 'Unknown'}
+        minute = minute_pool[min(ga + j, len(minute_pool) - 1)]
+        events.append(f'{minute}分 {team_b["name"]}: {scorer["name"]} が得点')
+
+    if random.random() < 0.35:
+        minute = random.randint(10, 88)
+        target_team = random.choice([team_a["name"], team_b["name"]])
+        events.append(f'{minute}分 {target_team}: 決定機を作るも得点ならず')
+
+    events.sort(key=lambda x: int(x.split('分')[0]))
+    return events
+
+
 def sort_table(teams):
     return sorted(
         teams,
@@ -495,6 +544,44 @@ def reset_team_for_new_season(team):
         team['youth'].append(generate_player(team['country'], team['name'], random.randint(100, 999), youth=True))
 
 
+def generate_sponsor_offer():
+    selected = get_selected_team()
+    if not selected:
+        return
+    game_state['sponsor_offer'] = make_sponsor_offer(
+        selected['country'],
+        selected['division'],
+        selected.get('sponsor')
+    )
+    offer = game_state['sponsor_offer']
+    game_state['news'].insert(
+        0,
+        f'新スポンサー候補: {offer["name"]} | 週次 ${offer["weekly_income"]:,} | 目標順位 {offer["target_rank"]}'
+    )
+
+
+def accept_sponsor_offer():
+    selected = get_selected_team()
+    offer = game_state.get('sponsor_offer')
+    if not selected or not offer:
+        ui.notify('スポンサーオファーがありません')
+        return
+    selected['sponsor'] = offer
+    game_state['news'].insert(0, f'新スポンサー {offer["name"]} と契約しました。')
+    game_state['sponsor_offer'] = None
+    refresh_ui()
+
+
+def reject_sponsor_offer():
+    offer = game_state.get('sponsor_offer')
+    if not offer:
+        ui.notify('スポンサーオファーがありません')
+        return
+    game_state['news'].insert(0, f'スポンサー {offer["name"]} のオファーを見送りました。')
+    game_state['sponsor_offer'] = None
+    refresh_ui()
+
+
 def apply_season_sponsor_bonus():
     selected = get_selected_team()
     if not selected:
@@ -549,6 +636,9 @@ def season_rollover():
     game_state['transfer_offers'] = []
     game_state['season'] += 1
     game_state['week'] = 1
+    game_state['last_match_result'] = ''
+    game_state['last_match_events'] = []
+    generate_sponsor_offer()
     game_state['news'].insert(0, 'シーズン終了。昇格・降格を反映しました。')
 
 
@@ -581,6 +671,8 @@ def play_next_week():
     selected_team = get_selected_team()
     logs = []
     selected_won = False
+    game_state['last_match_result'] = ''
+    game_state['last_match_events'] = []
 
     for div_key in ['1', '2', '3']:
         division = game_state['divisions'][div_key]
@@ -602,6 +694,9 @@ def play_next_week():
                 selected_team['budget'] += gate_income
                 selected_team['fans'] += random.randint(20, 120)
                 add_finance_log('試合収入', gate_income, 'リーグ戦')
+
+                game_state['last_match_result'] = result
+                game_state['last_match_events'] = build_match_events(home, away, hg, ag)
 
     apply_weekly_finance(selected_team, won=selected_won)
     recover_between_weeks()
@@ -776,10 +871,10 @@ def reject_transfer_offer(player_id):
 def select_player(player_id):
     game_state['selected_player_id'] = player_id
     nav_state['section'] = 'squad'
-    refresh_ui()
     player = get_player_by_id(player_id)
+    refresh_ui()
     if player:
-        ui.notify(f'{player["name"]} の詳細を表示しました')
+        ui.notify(f'{player["name"]} の詳細を表示中')
 
 
 def save_game():
@@ -822,21 +917,17 @@ def set_team_tactic(tactic_name):
         refresh_ui()
 
 
+def set_country_temp(country_name):
+    game_state['selected_country'] = country_name
+    refresh_ui()
+
+
 def on_new_world(country_name):
     global game_state
     game_state = build_world(country_name)
     nav_state['section'] = 'dashboard'
     refresh_ui()
     ui.notify(f'{country_name} で新規ワールドを作成しました')
-
-
-def on_select_club(label):
-    if not label:
-        return
-    _, club_name = label.split('|', 1)
-    game_state['selected_club'] = club_name.strip()
-    game_state['news'].insert(0, f'クラブを選択: {game_state["selected_club"]}')
-    refresh_ui()
 
 
 def select_club_direct(club_name):
@@ -850,21 +941,23 @@ def render_world_setup():
     with world_setup_container:
         with ui.card().classes('w-full mobile-card'):
             ui.label('ワールド設定').classes('section-title')
-            ui.select(
-                options=list(COUNTRIES.keys()),
-                value=game_state['selected_country'],
-                label='国を選択',
-                on_change=lambda e: None,
-            ).bind_value(country_select, 'value').classes('w-full')
-            ui.button('新しい世界を作成', on_click=lambda: on_new_world(country_select.value)).classes('w-full mobile-btn')
+            ui.label(f'現在の国: {game_state["selected_country"]}').classes('body-text')
+
+            with ui.element('div').classes('choice-grid'):
+                for country in COUNTRIES.keys():
+                    color = 'primary' if country == game_state['selected_country'] else 'secondary'
+                    ui.button(
+                        country,
+                        on_click=lambda _, c=country: set_country_temp(c)
+                    ).props(f'outline color={color}')
+
+            ui.button('新しい世界を作成', on_click=lambda: on_new_world(game_state['selected_country'])).classes('w-full mobile-btn')
 
             if not game_state['selected_club']:
-                ui.label('最初のクラブを選んでください').classes('text-body2')
-                club_select.classes('w-full')
-                club_picker_container.classes('w-full')
+                ui.label('最初のクラブを選んでください').classes('body-text')
             else:
-                ui.label(f'選択中クラブ: {game_state["selected_club"]}').classes('text-body2')
-                ui.label('クラブの選び直しはできません。変更したい場合は新しい世界を作成してください。').classes('text-caption')
+                ui.label(f'選択中クラブ: {game_state["selected_club"]}').classes('body-text')
+                ui.label('クラブの選び直しはできません。変更したい場合は新しい世界を作成してください。').classes('muted-text')
 
 
 def render_club_picker():
@@ -876,7 +969,7 @@ def render_club_picker():
         for div_key in ['1', '2', '3']:
             division = game_state['divisions'][div_key]
             with ui.card().classes('w-full mobile-card'):
-                ui.label(division['name']).classes('text-body1')
+                ui.label(division['name']).classes('body-text')
                 for team in sort_table(division['teams']):
                     label = f'{team["name"]} | 評判 {team["reputation"]} | 予算 ${team["budget"]:,}'
                     ui.button(
@@ -890,7 +983,7 @@ def render_status():
     with status_container:
         selected = get_selected_team()
         with ui.card().classes('w-full mobile-card status-card'):
-            ui.label(APP_NAME).classes('text-h6 strong-text')
+            ui.label(APP_NAME).classes('text-h5 strong-text')
             ui.label(f'{game_state["selected_country"]} | シーズン {game_state["season"]} | 週 {min(game_state["week"], WEEKS_PER_SEASON)}').classes('muted-text')
             ui.label(f'クラブ: {game_state["selected_club"] or "未選択"}').classes('body-text')
             if selected:
@@ -924,6 +1017,19 @@ def render_dashboard():
             f'勝利ボーナス ${sponsor.get("win_bonus", 0):,} | '
             f'目標順位 {sponsor.get("target_rank", "-")}'
         ).classes('muted-text')
+
+    if game_state.get('sponsor_offer'):
+        offer = game_state['sponsor_offer']
+        with ui.card().classes('w-full mobile-card highlight-card'):
+            ui.label('スポンサー更新オファー').classes('section-title')
+            ui.label(f'{offer["name"]}').classes('body-text')
+            ui.label(
+                f'週次 ${offer["weekly_income"]:,} | 勝利ボーナス ${offer["win_bonus"]:,} | '
+                f'シーズン報酬 ${offer["season_bonus"]:,} | 目標順位 {offer["target_rank"]}'
+            ).classes('muted-text')
+            with ui.row().classes('w-full gap-2'):
+                ui.button('契約する', on_click=accept_sponsor_offer).props('color=positive').classes('w-full mobile-btn')
+                ui.button('見送る', on_click=reject_sponsor_offer).props('color=negative').classes('w-full mobile-btn')
 
     with ui.card().classes('w-full mobile-card'):
         ui.label('最新ニュース').classes('section-title')
@@ -1000,6 +1106,13 @@ def render_match():
         if 0 <= week_index < len(div['schedule']):
             for home, away in div['schedule'][week_index]:
                 ui.label(f'{home} vs {away}').classes('body-text')
+
+    if game_state['last_match_result']:
+        with ui.card().classes('w-full mobile-card highlight-card'):
+            ui.label('直近試合').classes('section-title')
+            ui.label(game_state['last_match_result']).classes('body-text')
+            for e in game_state['last_match_events']:
+                ui.label(f'• {e}').classes('muted-text')
 
 
 def render_standings():
@@ -1143,22 +1256,6 @@ def render_content():
 
 
 def refresh_ui():
-    if game_state['selected_country'] != country_select.value:
-        country_select.value = game_state['selected_country']
-
-    clubs = []
-    for div_key in ['1', '2', '3']:
-        for t in sort_table(game_state['divisions'][div_key]['teams']):
-            clubs.append(f'Div {div_key} | {t["name"]}')
-    club_select.options = clubs
-
-    if game_state['selected_club']:
-        team = get_team(game_state['selected_club'])
-        if team:
-            club_select.value = f'Div {team["division"]} | {team["name"]}'
-    else:
-        club_select.value = None
-
     render_world_setup()
     render_club_picker()
     render_status()
@@ -1171,7 +1268,7 @@ ui.add_head_html('''
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <style>
     body {
-        background: #0f172a;
+        background: #081225;
         color: #f8fafc;
     }
     .nicegui-content {
@@ -1181,19 +1278,21 @@ ui.add_head_html('''
         box-sizing: border-box;
     }
     .mobile-card {
-        border-radius: 14px;
-        margin-bottom: 10px;
-        background: #182334 !important;
+        border-radius: 16px;
+        margin-bottom: 12px;
+        background: #16243a !important;
         color: #f8fafc !important;
-        border: 1px solid rgba(148, 163, 184, 0.14);
+        border: 1px solid rgba(148, 163, 184, 0.18);
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.22);
     }
     .mobile-btn {
-        min-height: 44px;
+        min-height: 46px;
         font-weight: 700;
+        border-radius: 12px;
     }
     .footer-nav {
         padding-bottom: env(safe-area-inset-bottom);
-        background: rgba(15, 23, 42, 0.96);
+        background: rgba(8, 18, 37, 0.98);
         backdrop-filter: blur(10px);
         border-top: 1px solid rgba(148, 163, 184, 0.18);
     }
@@ -1202,22 +1301,35 @@ ui.add_head_html('''
         font-weight: 700;
     }
     .body-text {
-        color: #f1f5f9 !important;
+        color: #f8fafc !important;
+        line-height: 1.45;
     }
     .muted-text {
-        color: #cbd5e1 !important;
+        color: #dbe7f5 !important;
+        line-height: 1.4;
     }
     .section-title {
         color: #ffffff !important;
-        font-size: 1.05rem;
-        font-weight: 700;
+        font-size: 1.08rem;
+        font-weight: 800;
     }
     .status-card {
-        background: #1d2a3f !important;
+        background: #1b2b44 !important;
     }
     .highlight-card {
-        border: 1px solid rgba(96, 165, 250, 0.45);
-        background: #1b2940 !important;
+        border: 1px solid rgba(96, 165, 250, 0.55);
+        background: #1d304d !important;
+    }
+    .choice-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 8px;
+        width: 100%;
+    }
+    .choice-grid button {
+        min-height: 44px;
+        border-radius: 12px;
+        font-weight: 700;
     }
 </style>
 ''')
@@ -1227,41 +1339,29 @@ with ui.header(fixed=True).classes('items-center justify-between bg-slate-900 te
     ui.label('モバイル版').classes('text-caption')
 
 world_setup_container = ui.column().classes('w-full')
-
-with ui.card().classes('w-full mobile-card').style('display:none'):
-    country_select = ui.select(
-        options=list(COUNTRIES.keys()),
-        value=game_state['selected_country'],
-        label='国を選択',
-    ).classes('w-full')
-    club_select = ui.select(
-        options=[],
-        value=None,
-        label='クラブを選択',
-        on_change=lambda e: on_select_club(e.value),
-    ).classes('w-full')
-    club_picker_container = ui.column().classes('w-full')
-
+club_picker_container = ui.column().classes('w-full')
 status_container = ui.column().classes('w-full')
 content_container = ui.column().classes('w-full')
+
+country_select = ui.input(value=game_state['selected_country']).style('display:none')
 
 with ui.footer(fixed=True).classes('footer-nav'):
     with ui.row().classes('w-full no-wrap justify-around items-center gap-1'):
         for key, label in [
-            ('dashboard', 'ホーム'),
-            ('squad', 'チーム'),
-            ('match', '試合'),
-            ('standings', '順位'),
-            ('youth', 'ユース'),
-            ('cup', 'カップ'),
-            ('scout', 'スカウト'),
-            ('transfer', '移籍'),
-            ('save', '保存'),
+            ('dashboard', '家'),
+            ('squad', '団'),
+            ('match', '試'),
+            ('standings', '順'),
+            ('youth', '育'),
+            ('cup', '杯'),
+            ('scout', '探'),
+            ('transfer', '移'),
+            ('save', '保'),
         ]:
             ui.button(
                 label,
                 on_click=lambda _, k=key: (nav_state.__setitem__('section', k), render_content()),
-            ).props('flat dense').classes('text-xs text-white')
+            ).props('flat dense').classes('text-sm text-white')
 
 refresh_ui()
 
