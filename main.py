@@ -1,1368 +1,2393 @@
 from nicegui import ui
-import json
-import os
-import random
-from pathlib import Path
-
-SAVE_FILE = Path('save.json')
-PORT = int(os.getenv('PORT', '8080'))
-
-APP_NAME = 'Club Strive'
-TEAMS_PER_DIV = 10
-DIVISIONS = 3
-SQUAD_SIZE = 18
-MAX_SQUAD_SIZE = 24
-MAX_YOUTH_SIZE = 8
-WEEKS_PER_SEASON = (TEAMS_PER_DIV - 1) * 2  # 18
-
-COUNTRIES = {
-    'England': {
-        'club_prefix': ['North', 'East', 'West', 'South', 'Royal', 'River', 'Iron', 'Blue', 'Red', 'Green', 'King', 'Queen'],
-        'club_suffix': ['FC', 'United', 'City', 'Rovers', 'Town', 'Athletic', 'Albion', 'Wanderers'],
-        'first_names': ['Jack', 'Oliver', 'Harry', 'George', 'James', 'Noah', 'Leo', 'Charlie', 'Oscar', 'Alfie'],
-        'last_names': ['Smith', 'Jones', 'Taylor', 'Brown', 'Wilson', 'Davies', 'Evans', 'Thomas', 'Johnson', 'Clark'],
-        'bias': {'SPD': 1.00, 'PAS': 1.00, 'TEC': 0.98, 'DEF': 1.02, 'PHY': 1.06, 'SHT': 1.00, 'MEN': 1.03},
-    },
-    'Brazil': {
-        'club_prefix': ['Real', 'Atletico', 'Nova', 'Santa', 'Porto', 'Rio', 'Samba', 'Verde', 'Sol', 'Cruzeiro'],
-        'club_suffix': ['FC', 'SC', 'Clube', 'Athletic', 'United'],
-        'first_names': ['Lucas', 'Joao', 'Mateus', 'Gabriel', 'Rafael', 'Pedro', 'Thiago', 'Bruno', 'Felipe', 'Diego'],
-        'last_names': ['Silva', 'Souza', 'Costa', 'Santos', 'Oliveira', 'Pereira', 'Almeida', 'Gomes', 'Lima', 'Rocha'],
-        'bias': {'SPD': 1.03, 'PAS': 1.03, 'TEC': 1.10, 'DEF': 0.95, 'PHY': 0.97, 'SHT': 1.02, 'MEN': 0.98},
-    },
-    'Germany': {
-        'club_prefix': ['Berg', 'Union', 'Eintracht', 'Rot', 'Blau', 'Schwarz', 'Rhein', 'Bayern', 'Nord', 'Sud'],
-        'club_suffix': ['FC', 'SV', 'SC', 'United', 'Athletic'],
-        'first_names': ['Lukas', 'Jonas', 'Leon', 'Felix', 'Finn', 'Noah', 'Paul', 'Tim', 'Max', 'Moritz'],
-        'last_names': ['Muller', 'Schmidt', 'Schneider', 'Fischer', 'Weber', 'Meyer', 'Wagner', 'Becker', 'Hoffmann', 'Koch'],
-        'bias': {'SPD': 0.98, 'PAS': 1.01, 'TEC': 0.99, 'DEF': 1.05, 'PHY': 1.05, 'SHT': 0.99, 'MEN': 1.05},
-    },
-    'Spain': {
-        'club_prefix': ['Real', 'Deportivo', 'Atletico', 'Costa', 'Roja', 'Azul', 'Valle', 'Montana', 'Sol', 'Mar'],
-        'club_suffix': ['CF', 'FC', 'United', 'Athletic', 'Club'],
-        'first_names': ['Hugo', 'Pablo', 'Alejandro', 'Diego', 'Javier', 'Alvaro', 'Daniel', 'Sergio', 'Ivan', 'Adrian'],
-        'last_names': ['Garcia', 'Fernandez', 'Gonzalez', 'Rodriguez', 'Lopez', 'Martinez', 'Sanchez', 'Perez', 'Gomez', 'Martin'],
-        'bias': {'SPD': 1.00, 'PAS': 1.08, 'TEC': 1.08, 'DEF': 0.97, 'PHY': 0.96, 'SHT': 1.01, 'MEN': 1.00},
-    },
-    'Italy': {
-        'club_prefix': ['Real', 'Inter', 'Atletico', 'Roma', 'Torino', 'Milano', 'Lazio', 'Verona', 'Napoli', 'Fiora'],
-        'club_suffix': ['FC', 'Calcio', 'United', 'SC', 'Club'],
-        'first_names': ['Luca', 'Marco', 'Matteo', 'Andrea', 'Davide', 'Federico', 'Stefano', 'Giorgio', 'Antonio', 'Simone'],
-        'last_names': ['Rossi', 'Russo', 'Ferrari', 'Esposito', 'Bianchi', 'Romano', 'Gallo', 'Costa', 'Fontana', 'Conti'],
-        'bias': {'SPD': 0.97, 'PAS': 1.04, 'TEC': 1.03, 'DEF': 1.04, 'PHY': 0.98, 'SHT': 1.00, 'MEN': 1.03},
-    },
-    'Japan': {
-        'club_prefix': ['Blue', 'Red', 'Shining', 'Phoenix', 'North', 'East', 'West', 'South', 'Rising', 'Ocean'],
-        'club_suffix': ['FC', 'United', 'SC', 'Athletic', 'City'],
-        'first_names': ['Haruto', 'Ren', 'Yuto', 'Sota', 'Kaito', 'Riku', 'Takumi', 'Daiki', 'Yuma', 'Shota'],
-        'last_names': ['Sato', 'Suzuki', 'Takahashi', 'Tanaka', 'Ito', 'Yamamoto', 'Watanabe', 'Nakamura', 'Kobayashi', 'Kato'],
-        'bias': {'SPD': 1.01, 'PAS': 1.02, 'TEC': 1.01, 'DEF': 0.98, 'PHY': 0.92, 'SHT': 0.98, 'MEN': 1.05},
-    },
+import random, math, copy, json
+# =========================================================
+# 定数・設定
+# =========================================================
+APP_TITLE = 'Club Strive v6'
+MAX_SQUAD = 25
+MIN_YOUTH = 10
+MAX_YOUTH = 15
+SEASON_WEEKS = 36
+CUP_START = 10
+TRANSFER_WINDOWS = [(1,6),(19,22)]
+SALARY_CAP = {'D1':420000,'D2':270000,'D3':165000}
+COUNTRIES = ['England','Spain','Germany','Italy','France','Brazil','Japan']
+POSITIONS = ['GK','DF','MF','FW']
+LEAGUE_STRENGTH = {'England':92,'Spain':90,'Germany':88,'Italy':87,'France':86,'Brazil':85,'J
+PLAY_STYLES = {
+'FW':['ストライカー','ポーチャー','ターゲットマン','カウンターランナー','トリックスター'],
+'MF':['プレイメーカー','ボックス・トゥ・ボックス','ディストラクター','チャンスクリエイター','シャドースト
+'DF':['タックルマスター','スイーパー','ビルドアップ型','空中戦マスター'],
+'GK':['ショットストッパー','スイーパーキーパー'],
 }
-
+PERSONALITIES = ['真面目','野心家','ムードメーカー','気分屋','忠誠心高い','努力家','スター気質','短気',
+YOUTH_POLICIES = {
+'バランス':{'SPD':1.00,'TEC':1.00,'PHY':1.00},
+'スピード':{'SPD':1.15,'TEC':0.95,'PHY':1.00},
+'テクニック':{'SPD':0.95,'TEC':1.15,'PHY':0.95},
+'フィジカル':{'SPD':0.95,'TEC':0.95,'PHY':1.15},
+}
 TACTICS = {
-    'バランス': {'atk': 1.00, 'def': 1.00, 'fatigue': 1.00},
-    'ポゼッション': {'atk': 1.03, 'def': 1.00, 'fatigue': 1.03},
-    'カウンター': {'atk': 1.05, 'def': 0.98, 'fatigue': 0.98},
-    'ハイプレス': {'atk': 1.04, 'def': 1.03, 'fatigue': 1.08},
-    'ローブロック': {'atk': 0.96, 'def': 1.08, 'fatigue': 0.95},
+'バランス':{'atk':1.00,'def':1.00},
+'攻撃的':{'atk':1.12,'def':0.90},
+'守備的':{'atk':0.90,'def':1.12},
+'プレス':{'atk':1.06,'def':1.06},
+'カウンター':{'atk':1.08,'def':1.04},
 }
-
-POS_SEQUENCE = ['GK', 'DF', 'DF', 'DF', 'DF', 'MF', 'MF', 'MF', 'MF', 'FW', 'FW', 'GK', 'DF', 'DF', 'MF', 'MF', 'FW', 'FW']
-
-nav_state = {'section': 'dashboard'}
-
-country_select = None
-club_picker_container = None
-status_container = None
-content_container = None
-world_setup_container = None
-
-game_state = None
-
-
-def clamp(x, lo, hi):
-    return lo if x < lo else hi if x > hi else x
-
-
-def avg(values):
-    return round(sum(values) / len(values), 1) if values else 0
-
-
-def avg_attrs(attrs):
-    return round(sum(attrs.values()) / len(attrs))
-
-
-def make_name(country_data):
-    return f"{random.choice(country_data['first_names'])} {random.choice(country_data['last_names'])}"
-
-
-def make_club_name(country_data, used_names):
-    for _ in range(3000):
-        name = f"{random.choice(country_data['club_prefix'])} {random.choice(country_data['club_suffix'])}"
-        if name not in used_names:
-            used_names.add(name)
-            return name
-    name = f"{random.choice(country_data['club_prefix'])} {random.choice(country_data['club_suffix'])} {random.randint(1, 999)}"
-    used_names.add(name)
-    return name
-
-
-def base_attrs_by_pos(pos):
-    if pos == 'GK':
-        return {'SPD': 52, 'PAS': 58, 'TEC': 55, 'DEF': 73, 'PHY': 68, 'SHT': 35, 'MEN': 66}
-    if pos == 'DF':
-        return {'SPD': 62, 'PAS': 58, 'TEC': 57, 'DEF': 70, 'PHY': 70, 'SHT': 48, 'MEN': 62}
-    if pos == 'MF':
-        return {'SPD': 64, 'PAS': 68, 'TEC': 68, 'DEF': 58, 'PHY': 62, 'SHT': 60, 'MEN': 64}
-    return {'SPD': 72, 'PAS': 60, 'TEC': 67, 'DEF': 42, 'PHY': 66, 'SHT': 72, 'MEN': 61}
-
-
-def recompute_player(player):
-    player['overall'] = avg_attrs(player['attrs'])
-    player['value'] = max(30000, int(player['overall'] * player['overall'] * 900 + player['potential'] * 2500 + random.randint(-8000, 8000)))
-    player['wage'] = max(800, int(player['overall'] * 85 + random.randint(150, 900)))
-
-
-def generate_player(country_name, club_name, idx, youth=False):
-    country_data = COUNTRIES[country_name]
-    pos = POS_SEQUENCE[idx % len(POS_SEQUENCE)] if not youth else random.choice(['GK', 'DF', 'DF', 'MF', 'MF', 'FW'])
-    age = random.randint(15, 18) if youth else random.randint(17, 33)
-    base = base_attrs_by_pos(pos)
-
-    attrs = {}
-    for k, v in base.items():
-        bias = country_data['bias'][k]
-        spread = 10 if youth else 8
-        raw = random.randint(v - spread, v + spread)
-        if youth:
-            raw -= random.randint(1, 5)
-        attrs[k] = clamp(int(raw * bias), 35, 90)
-
-    overall = avg_attrs(attrs)
-    potential = clamp(overall + random.randint(4, 18) if youth else overall + random.randint(0, 15), overall, 94)
-
-    player = {
-        'id': f'{club_name}_{idx}_{random.randint(1000, 9999)}',
-        'name': make_name(country_data),
-        'age': age,
-        'nationality': country_name,
-        'club': club_name,
-        'pos': pos,
-        'attrs': attrs,
-        'overall': overall,
-        'potential': potential,
-        'stamina': random.randint(85, 100) if not youth else 100,
-        'morale': random.randint(55, 75) if not youth else random.randint(60, 80),
-        'injury': 0,
-        'value': 0,
-        'wage': 0,
-        'transfer_listed': False,
-    }
-    recompute_player(player)
-    return player
-
-
-def create_sponsor(country_name, division):
-    sponsor_names = {
-        'England': ['NorthSea Media', 'Crown Logistics', 'Royal Finance', 'IronWorks Group'],
-        'Brazil': ['Rio Energy', 'Sol Telecom', 'Verde Bank', 'Nova Foods'],
-        'Germany': ['Rhein Motors', 'Union Technik', 'Nord Industrie', 'Berg Systems'],
-        'Spain': ['Costa Air', 'Sol Bank', 'Mar Holdings', 'Deportivo Media'],
-        'Italy': ['Roma Invest', 'Milano Foods', 'Verona Tech', 'Lazio Capital'],
-        'Japan': ['Aozora Holdings', 'Kouyou Foods', 'Shinsei Tech', 'Hikari Logistics'],
-    }
-
-    weekly_base = {1: 45000, 2: 28000, 3: 18000}[division]
-    bonus_base = {1: 220000, 2: 140000, 3: 90000}[division]
-    target_rank = {1: 5, 2: 4, 3: 3}[division]
-
-    return {
-        'name': random.choice(sponsor_names[country_name]),
-        'weekly_income': weekly_base + random.randint(-6000, 6000),
-        'win_bonus': random.randint(4000, 12000),
-        'season_bonus': bonus_base + random.randint(-30000, 30000),
-        'target_rank': target_rank,
-    }
-
-
-def make_sponsor_offer(country_name, division, current_sponsor=None):
-    sponsor_names = {
-        'England': ['Skyline Works', 'Union Media', 'Harbor Trade', 'Cobalt Finance'],
-        'Brazil': ['Rio Motion', 'Samba Drinks', 'Sol Group', 'Atlante Foods'],
-        'Germany': ['Nord Stahl', 'Rhein Mobile', 'Kaiser Tech', 'Berg Trade'],
-        'Spain': ['Costa Vision', 'Iberia Foods', 'Valle Systems', 'Roja Energy'],
-        'Italy': ['Milano Mode', 'Roma Capital', 'Verona Foods', 'Lazio Systems'],
-        'Japan': ['Hikari Systems', 'Shion Foods', 'Aoba Capital', 'Kouga Logistics'],
-    }
-    name = random.choice(sponsor_names[country_name])
-    if current_sponsor and name == current_sponsor.get('name'):
-        name += ' Plus'
-
-    return {
-        'name': name,
-        'weekly_income': max(8000, {1: 46000, 2: 29000, 3: 19000}[division] + random.randint(-8000, 12000)),
-        'win_bonus': random.randint(5000, 15000),
-        'season_bonus': max(50000, {1: 240000, 2: 150000, 3: 100000}[division] + random.randint(-40000, 50000)),
-        'target_rank': max(1, {1: 5, 2: 4, 3: 3}[division] + random.choice([-1, 0, 1])),
-    }
-
-
-def create_team(country_name, club_name, division):
-    base_rep = {1: 72, 2: 64, 3: 57}[division]
-    players = [generate_player(country_name, club_name, i) for i in range(SQUAD_SIZE)]
-    youth = [generate_player(country_name, club_name, i + 100, youth=True) for i in range(5)]
-    return {
-        'name': club_name,
-        'country': country_name,
-        'division': division,
-        'budget': random.randint(700_000, 1_600_000) * (4 - division),
-        'fans': random.randint(3000, 18000) * (4 - division),
-        'tactic': 'バランス',
-        'reputation': base_rep + random.randint(-4, 4),
-        'sponsor': create_sponsor(country_name, division),
-        'players': players,
-        'youth': youth,
-        'table': {'p': 0, 'w': 0, 'd': 0, 'l': 0, 'gf': 0, 'ga': 0, 'gd': 0, 'pts': 0},
-    }
-
-
-def round_robin_schedule(team_names):
-    names = team_names[:]
-    if len(names) % 2 != 0:
-        names.append('BYE')
-    rounds = []
-    n = len(names)
-    arr = names[:]
-
-    for _ in range(n - 1):
-        pairs = []
-        for i in range(n // 2):
-            a = arr[i]
-            b = arr[n - 1 - i]
-            if a != 'BYE' and b != 'BYE':
-                pairs.append((a, b))
-        rounds.append(pairs)
-        arr = [arr[0]] + [arr[-1]] + arr[1:-1]
-
-    second = [[(b, a) for (a, b) in rnd] for rnd in rounds]
-    return rounds + second
-
-
-def create_scout_pool(country_name, n=8):
-    pool = []
-    for i in range(n):
-        p = generate_player(country_name, 'Scout Pool', i)
-        p['value'] = int(p['value'] * random.uniform(0.82, 1.15))
-        p['wage'] = int(p['wage'] * random.uniform(0.85, 1.1))
-        pool.append(p)
-    return pool
-
-
-def init_cup(div1_teams):
-    chosen = random.sample([t['name'] for t in div1_teams], 8)
-    fixtures = [(chosen[0], chosen[1]), (chosen[2], chosen[3]), (chosen[4], chosen[5]), (chosen[6], chosen[7])]
-    return {
-        'round': '準々決勝',
-        'fixtures': fixtures,
-        'winner': '',
-        'history': [],
-        'active': True,
-    }
-
-
-def build_world(selected_country):
-    used_names = set()
-    divisions = {}
-
-    for div in range(1, DIVISIONS + 1):
-        teams = []
-        for _ in range(TEAMS_PER_DIV):
-            club_name = make_club_name(COUNTRIES[selected_country], used_names)
-            teams.append(create_team(selected_country, club_name, div))
-        divisions[str(div)] = {
-            'name': f'{selected_country} Division {div}',
-            'teams': teams,
-            'schedule': round_robin_schedule([t['name'] for t in teams]),
-        }
-
-    return {
-        'season': 1,
-        'week': 1,
-        'selected_country': selected_country,
-        'selected_club': '',
-        'selected_player_id': '',
-        'news': [f'{selected_country} のワールドを作成しました。'],
-        'divisions': divisions,
-        'scout_pool': create_scout_pool(selected_country, 10),
-        'transfer_offers': [],
-        'cup': init_cup(divisions['1']['teams']),
-        'finance_history': [],
-        'last_match_result': '',
-        'last_match_events': [],
-        'sponsor_offer': None,
-    }
-
-
-def get_team(team_name):
-    for div in game_state['divisions'].values():
-        for team in div['teams']:
-            if team['name'] == team_name:
-                return team
-    return None
-
-
-def get_selected_team():
-    if not game_state['selected_club']:
-        return None
-    return get_team(game_state['selected_club'])
-
-
-def get_player_by_id(player_id):
-    if not player_id:
-        return None
-    for div in game_state['divisions'].values():
-        for team in div['teams']:
-            for p in team['players']:
-                if p['id'] == player_id:
-                    return p
-            for p in team['youth']:
-                if p['id'] == player_id:
-                    return p
-    for p in game_state.get('scout_pool', []):
-        if p['id'] == player_id:
-            return p
-    return None
-
-
-def available_lineup(team):
-    fit = [p for p in team['players'] if p['injury'] == 0]
-    return sorted(fit, key=lambda p: p['overall'], reverse=True)[:11]
-
-
-def team_strength(team):
-    players = available_lineup(team)
-    if not players:
-        return 40.0
-    base = sum(p['overall'] for p in players) / len(players)
-    stamina = sum(p['stamina'] for p in players) / len(players)
-    morale = sum(p['morale'] for p in players) / len(players)
-    tactic = TACTICS.get(team['tactic'], TACTICS['バランス'])
-
-    strength = base
-    strength *= (0.92 + (stamina / 100) * 0.12)
-    strength *= (0.94 + (morale / 100) * 0.10)
-    strength *= ((tactic['atk'] + tactic['def']) / 2)
-    strength += team['reputation'] * 0.15
-    strength -= max(0, 11 - len(players)) * 1.8
-    return strength
-
-
-def maybe_injure_player(team):
-    candidates = [p for p in team['players'] if p['injury'] == 0]
-    if candidates and random.random() < 0.12:
-        p = random.choice(candidates)
-        weeks = random.randint(1, 4)
-        p['injury'] = weeks
-        if team['name'] == game_state['selected_club']:
-            game_state['news'].insert(0, f'{p["name"]} が {weeks} 週間の負傷です。')
-
-
-def apply_fatigue(team):
-    tactic = TACTICS.get(team['tactic'], TACTICS['バランス'])
-    for p in team['players']:
-        if p['injury'] > 0:
-            continue
-        p['stamina'] = clamp(int(p['stamina'] - random.randint(4, 10) * tactic['fatigue']), 40, 100)
-        p['morale'] = clamp(p['morale'] + random.randint(-2, 2), 35, 95)
-    maybe_injure_player(team)
-
-
-def recover_between_weeks():
-    for div in game_state['divisions'].values():
-        for team in div['teams']:
-            for p in team['players']:
-                if p['injury'] > 0:
-                    p['injury'] -= 1
-                    p['stamina'] = clamp(p['stamina'] + random.randint(2, 5), 40, 100)
-                    if p['injury'] == 0 and team['name'] == game_state['selected_club']:
-                        game_state['news'].insert(0, f'{p["name"]} が負傷から復帰しました。')
-                else:
-                    p['stamina'] = clamp(p['stamina'] + random.randint(3, 7), 40, 100)
-                p['morale'] = clamp(p['morale'] + random.randint(-1, 2), 35, 95)
-
-
-def update_table(team, gf, ga):
-    t = team['table']
-    t['p'] += 1
-    t['gf'] += gf
-    t['ga'] += ga
-    t['gd'] = t['gf'] - t['ga']
-    if gf > ga:
-        t['w'] += 1
-        t['pts'] += 3
-    elif gf == ga:
-        t['d'] += 1
-        t['pts'] += 1
-    else:
-        t['l'] += 1
-
-
-def simulate_match(team_a, team_b, cup=False):
-    sa = team_strength(team_a)
-    sb = team_strength(team_b)
-
-    ga = max(0, int(round(random.gauss(sa / 24, 0.9))))
-    gb = max(0, int(round(random.gauss(sb / 24, 0.9))))
-    ga = min(6, ga)
-    gb = min(6, gb)
-
-    if cup and ga == gb:
-        if random.random() < 0.5:
-            ga += 1
-        else:
-            gb += 1
-
-    if not cup:
-        update_table(team_a, ga, gb)
-        update_table(team_b, gb, ga)
-
-    apply_fatigue(team_a)
-    apply_fatigue(team_b)
-    return ga, gb
-
-
-def build_match_events(team_a, team_b, ga, gb):
-    events = []
-    minute_pool = random.sample(range(5, 91), k=max(1, ga + gb))
-    minute_pool.sort()
-
-    home_players = [p for p in available_lineup(team_a) if p['pos'] != 'GK'] or available_lineup(team_a)
-    away_players = [p for p in available_lineup(team_b) if p['pos'] != 'GK'] or available_lineup(team_b)
-
-    for i in range(ga):
-        scorer = random.choice(home_players) if home_players else {'name': 'Unknown'}
-        minute = minute_pool[min(i, len(minute_pool) - 1)]
-        events.append(f'{minute}分 {team_a["name"]}: {scorer["name"]} が得点')
-    for j in range(gb):
-        scorer = random.choice(away_players) if away_players else {'name': 'Unknown'}
-        minute = minute_pool[min(ga + j, len(minute_pool) - 1)]
-        events.append(f'{minute}分 {team_b["name"]}: {scorer["name"]} が得点')
-
-    if random.random() < 0.35:
-        minute = random.randint(10, 88)
-        target_team = random.choice([team_a["name"], team_b["name"]])
-        events.append(f'{minute}分 {target_team}: 決定機を作るも得点ならず')
-
-    events.sort(key=lambda x: int(x.split('分')[0]))
-    return events
-
-
-def sort_table(teams):
-    return sorted(
-        teams,
-        key=lambda t: (t['table']['pts'], t['table']['gd'], t['table']['gf'], t['reputation']),
-        reverse=True,
-    )
-
-
-def add_finance_log(category, amount, note=''):
-    game_state['finance_history'].insert(0, {
-        'season': game_state['season'],
-        'week': game_state['week'],
-        'category': category,
-        'amount': amount,
-        'note': note,
-    })
-    game_state['finance_history'] = game_state['finance_history'][:80]
-
-
-def apply_weekly_finance(team, won=False):
-    sponsor = team.get('sponsor', {})
-    weekly_income = sponsor.get('weekly_income', 0)
-    win_bonus = sponsor.get('win_bonus', 0)
-
-    wage_bill = sum(p['wage'] for p in team['players'])
-    team['budget'] += weekly_income
-    add_finance_log('スポンサー収入', weekly_income, sponsor.get('name', 'スポンサー不明'))
-
-    team['budget'] -= wage_bill
-    add_finance_log('人件費', -wage_bill, '週給支払い')
-
-    if won:
-        team['budget'] += win_bonus
-        add_finance_log('勝利ボーナス', win_bonus, sponsor.get('name', 'スポンサー不明'))
-
-
-def club_initial_assessment(team):
-    avg_ovr = avg([p['overall'] for p in team['players']])
-    avg_pot = avg([p['potential'] for p in team['players']])
-    avg_age = avg([p['age'] for p in team['players']])
-
-    baseline = {1: 70, 2: 63, 3: 57}[team['division']]
-    strength_gap = avg_ovr - baseline
-
-    if strength_gap >= 5:
-        level = '優勝候補'
-    elif strength_gap >= 2:
-        level = '上位争い'
-    elif strength_gap >= -1:
-        level = '中位想定'
-    elif strength_gap >= -4:
-        level = '残留争い'
-    else:
-        level = 'かなり厳しい戦力'
-
-    return {
-        'avg_ovr': avg_ovr,
-        'avg_pot': avg_pot,
-        'avg_age': avg_age,
-        'level': level,
-    }
-
-
-def reset_team_for_new_season(team):
-    team['table'] = {'p': 0, 'w': 0, 'd': 0, 'l': 0, 'gf': 0, 'ga': 0, 'gd': 0, 'pts': 0}
-    for p in team['players']:
-        p['age'] += 1
-        if p['age'] <= 23 and p['overall'] < p['potential'] and random.random() < 0.45:
-            for k in p['attrs']:
-                if random.random() < 0.4:
-                    p['attrs'][k] = clamp(p['attrs'][k] + random.randint(0, 2), 35, 95)
-        elif p['age'] >= 30 and random.random() < 0.35:
-            for k in p['attrs']:
-                if random.random() < 0.35:
-                    p['attrs'][k] = clamp(p['attrs'][k] - random.randint(0, 1), 35, 95)
-
-        recompute_player(p)
-        p['stamina'] = random.randint(88, 100)
-        p['morale'] = clamp(p['morale'] + random.randint(-3, 6), 40, 95)
-        p['injury'] = 0
-        p['transfer_listed'] = False
-
-    while len(team['youth']) < 5:
-        team['youth'].append(generate_player(team['country'], team['name'], random.randint(100, 999), youth=True))
-
-
-def generate_sponsor_offer():
-    selected = get_selected_team()
-    if not selected:
-        return
-    game_state['sponsor_offer'] = make_sponsor_offer(
-        selected['country'],
-        selected['division'],
-        selected.get('sponsor')
-    )
-    offer = game_state['sponsor_offer']
-    game_state['news'].insert(
-        0,
-        f'新スポンサー候補: {offer["name"]} | 週次 ${offer["weekly_income"]:,} | 目標順位 {offer["target_rank"]}'
-    )
-
-
-def accept_sponsor_offer():
-    selected = get_selected_team()
-    offer = game_state.get('sponsor_offer')
-    if not selected or not offer:
-        ui.notify('スポンサーオファーがありません')
-        return
-    selected['sponsor'] = offer
-    game_state['news'].insert(0, f'新スポンサー {offer["name"]} と契約しました。')
-    game_state['sponsor_offer'] = None
-    refresh_ui()
-
-
-def reject_sponsor_offer():
-    offer = game_state.get('sponsor_offer')
-    if not offer:
-        ui.notify('スポンサーオファーがありません')
-        return
-    game_state['news'].insert(0, f'スポンサー {offer["name"]} のオファーを見送りました。')
-    game_state['sponsor_offer'] = None
-    refresh_ui()
-
-
-def apply_season_sponsor_bonus():
-    selected = get_selected_team()
-    if not selected:
-        return
-
-    ordered = sort_table(game_state['divisions'][str(selected['division'])]['teams'])
-    rank = next((i + 1 for i, t in enumerate(ordered) if t['name'] == selected['name']), None)
-    sponsor = selected.get('sponsor', {})
-
-    if rank is not None and rank <= sponsor.get('target_rank', 99):
-        bonus = sponsor.get('season_bonus', 0)
-        selected['budget'] += bonus
-        add_finance_log('シーズンスポンサー報酬', bonus, sponsor.get('name', 'スポンサー不明'))
-        game_state['news'].insert(0, f'スポンサー目標達成。{sponsor.get("name")} から ${bonus:,} の報酬を受け取りました。')
-    else:
-        game_state['news'].insert(0, f'{sponsor.get("name", "スポンサー不明")} の目標を達成できませんでした。')
-
-
-def season_rollover():
-    apply_season_sponsor_bonus()
-
-    div1 = sort_table(game_state['divisions']['1']['teams'])
-    div2 = sort_table(game_state['divisions']['2']['teams'])
-    div3 = sort_table(game_state['divisions']['3']['teams'])
-
-    up_2_to_1 = div2[:2]
-    down_1_to_2 = div1[-2:]
-    up_3_to_2 = div3[:2]
-    down_2_to_3 = div2[-2:]
-
-    for team in up_2_to_1:
-        team['division'] = 1
-    for team in down_1_to_2:
-        team['division'] = 2
-    for team in up_3_to_2:
-        team['division'] = 2
-    for team in down_2_to_3:
-        team['division'] = 3
-
-    game_state['divisions']['1']['teams'] = [t for t in div1 if t not in down_1_to_2] + up_2_to_1
-    game_state['divisions']['2']['teams'] = [t for t in div2 if t not in up_2_to_1 and t not in down_2_to_3] + down_1_to_2 + up_3_to_2
-    game_state['divisions']['3']['teams'] = [t for t in div3 if t not in up_3_to_2] + down_2_to_3
-
-    for div_key in ['1', '2', '3']:
-        teams = game_state['divisions'][div_key]['teams']
-        for t in teams:
-            reset_team_for_new_season(t)
-        game_state['divisions'][div_key]['schedule'] = round_robin_schedule([t['name'] for t in teams])
-
-    game_state['cup'] = init_cup(game_state['divisions']['1']['teams'])
-    game_state['scout_pool'] = create_scout_pool(game_state['selected_country'], 10)
-    game_state['transfer_offers'] = []
-    game_state['season'] += 1
-    game_state['week'] = 1
-    game_state['last_match_result'] = ''
-    game_state['last_match_events'] = []
-    generate_sponsor_offer()
-    game_state['news'].insert(0, 'シーズン終了。昇格・降格を反映しました。')
-
-
-def generate_transfer_offers():
-    selected = get_selected_team()
-    if not selected:
-        return
-    offers = []
-    listed = [p for p in selected['players'] if p.get('transfer_listed')]
-    ai_teams = [t for div in game_state['divisions'].values() for t in div['teams'] if t['name'] != selected['name']]
-
-    for p in listed:
-        if random.random() < 0.45:
-            buyer = random.choice(ai_teams)
-            fee = int(p['value'] * random.uniform(0.85, 1.25))
-            offers.append({'player_id': p['id'], 'player_name': p['name'], 'buyer': buyer['name'], 'fee': fee})
-    game_state['transfer_offers'] = offers
-
-
+FORMATIONS = {
+'4-3-3':{'GK':1,'DF':4,'MF':3,'FW':3},
+'4-4-2':{'GK':1,'DF':4,'MF':4,'FW':2},
+'3-5-2':{'GK':1,'DF':3,'MF':5,'FW':2},
+'5-3-2':{'GK':1,'DF':5,'MF':3,'FW':2},
+'4-2-3-1':{'GK':1,'DF':4,'MF':5,'FW':1},
+}
+MANAGER_SKILLS = {
+'戦術家':{'desc':'戦術補正+10%','req_exp':30},
+'育成型':{'desc':'ユース成長+15%','req_exp':50},
+'モチベーター':{'desc':'morale+5/週','req_exp':40},
+'スカウト眼':{'desc':'スカウット質+3','req_exp':35},
+'財務手腕':{'desc':'スポンサー+10%','req_exp':60},
+'鉄のメンタル':{'desc':'評価下落-50%','req_exp':45},
+}
+PLAYER_STATES = {
+'normal':{'label':'通常','goal_mult':1.00,'assist_mult':1.00},
+'hot':{'label':' 覚醒','goal_mult':1.40,'assist_mult':1.30},
+'slump':{'label':' スランプ','goal_mult':0.65,'assist_mult':0.75},
+}
+CAPTAIN_EFFECTS = {
+'ムードメーカー':{'locker_room':5,'morale':3},
+'真面目':{'locker_room':2,'morale':2},
+'忠誠心高い':{'locker_room':3,'fan_happiness':2},
+'チームプレイヤー':{'locker_room':4,'morale':2},
+'スター気質':{'club_brand':3,'fan_base':100},
+'短気':{'locker_room':-2,'morale':-1},
+}
+WEATHER = {
+'晴れ':{'atk_mod':1.00,'def_mod':1.00,'injury_mod':1.00,'att_mod':1.05},
+'曇り':{'atk_mod':1.00,'def_mod':1.00,'injury_mod':1.00,'att_mod':1.00},
+'雨':{'atk_mod':0.93,'def_mod':1.03,'injury_mod':1.15,'att_mod':0.90},
+'強風':{'atk_mod':0.88,'def_mod':1.05,'injury_mod':1.10,'att_mod':0.85},
+'雪':{'atk_mod':0.80,'def_mod':1.08,'injury_mod':1.25,'att_mod':0.75},
+}
+# ランダムイベント定義
+RANDOM_EVENTS = [
+{'id':'scandal','text':'{name}がスキャンダル報道！','choices':['謝罪声明を出す','沈黙を保つ','完全
+{'id':'rival_poach','text':'ライバル{rival}が{name}の引き抜きを企てている','choices':['即刻契約延
+{'id':'ob_coach','text':'クラブOB {name}がコーチ就任を申し出ている','choices':['採用する(無料)',
+{'id':'local_hero','text':'地元出身の{name}がスタメン定着！ファン熱狂','choices':['アピール'],'ef
+{'id':'anniversary','text':'クラブ創立記念日！特別試合を開催','choices':['盛大に祝う','通常通り']
+{'id':'youth_bigclub','text':'ビッグクラブが育成選手{name}を狙っている','choices':['全力で守る(契
+{'id':'intl_return_boost','text':'代表から帰還した{name}が一回り成長した','choices':['歓迎する']
+{'id':'media_praise','text':'メディアが監督の采配を絶賛！','choices':['コメントする'],'effects':
+{'id':'training_accident','text':'トレーニング中に{name}が軽傷','choices':['安静にさせる'],'eff
+{'id':'fan_protest','text':'ファンが成績に不満でデモ！','choices':['謝罪する','強気でいく'],'effe
+]
+ACHIEVEMENTS = {
+'first_win':{'name':'初勝利','desc':'リーグ戦で初勝利','icon':' '},
+'first_title':{'name':'初優勝','desc':'リーグ優勝','icon':' '},
+'cup_winner':{'name':'カップ制覇','desc':'国内カップ優勝','icon':' '},
+'unbeaten_5':{'name':'5連勝','desc':'5試合連続勝利','icon':' '},
+'youth_promoted':{'name':'育成の鬼','desc':'ユース昇格5人達成','icon':' '},
+'season3':{'name':'3年生存','desc':'3シーズン続投','icon':' '},
+'intl_winner':{'name':'国際制覇','desc':'国際大会優勝','icon':' '},
+'promoted':{'name':'昇格！','desc':'ディビジョン昇格','icon':' '},
+'rich_club':{'name':'大富豪','desc':'予算$5,000,000超','icon':' '},
+'wonder_scout':{'name':'名スカウト','desc':'ウォンダーキッド発見3人','icon':' '},
+'max_facility':{'name':'最高施設','desc':'全施設Lv5達成','icon':' '},
+'career_move':{'name':'渡り鳥監督','desc':'別クラブへ転身','icon':' '},
+'pk_hero':{'name':'PKの英雄','desc':'PKシューターアウトを制した','icon':' '},
+}
+COUNTRY_NAME_POOLS = {
+'England':{'first':['Jack','Noah','Oliver','Harry','George','Leo','James','Charlie','Osca
+'Spain':{'first':['Pablo','Alvaro','Hugo','Diego','Javier','Adrian','Sergio','Mario','Ike
+'Germany':{'first':['Lukas','Leon','Felix','Max','Finn','Jonas','Noah','Paul','Tim','Mori
+'Italy':{'first':['Luca','Marco','Matteo','Davide','Andrea','Federico','Stefano','Giorgio
+'France':{'first':['Lucas','Nathan','Hugo','Leo','Gabriel','Louis','Enzo','Arthur','Theo'
+'Brazil':{'first':['Lucas','Joao','Mateus','Gabriel','Rafael','Pedro','Thiago','Bruno','F
+'Japan':{'first':['Haruto','Ren','Yuto','Sota','Kaito','Riku','Takumi','Daiki','Yuma','Sh
+}
+STAFF_TYPES=['ヘッドコーチ','スカウト','フィジオ','アシスタント']
+FACILITY_TYPES=['youth','training','medical','scouting','stadium']
+BASE_ATTRS={
+'GK':{'SPD':45,'TEC':52,'PAS':50,'PHY':62,'SHT':30,'DEF':72,'MEN':60,'STA':75},
+'DF':{'SPD':56,'TEC':53,'PAS':54,'PHY':66,'SHT':38,'DEF':68,'MEN':58,'STA':72},
+'MF':{'SPD':60,'TEC':63,'PAS':65,'PHY':58,'SHT':52,'DEF':52,'MEN':60,'STA':70},
+'FW':{'SPD':67,'TEC':61,'PAS':54,'PHY':62,'SHT':68,'DEF':35,'MEN':62,'STA':68},
+}
+OVR_WEIGHTS={
+'GK':{'SPD':0.05,'TEC':0.10,'PAS':0.08,'PHY':0.15,'SHT':0.02,'DEF':0.35,'MEN':0.13,'STA':
+'DF':{'SPD':0.10,'TEC':0.12,'PAS':0.12,'PHY':0.18,'SHT':0.05,'DEF':0.25,'MEN':0.10,'STA':
+'MF':{'SPD':0.12,'TEC':0.18,'PAS':0.20,'PHY':0.12,'SHT':0.12,'DEF':0.10,'MEN':0.08,'STA':
+'FW':{'SPD':0.15,'TEC':0.15,'PAS':0.10,'PHY':0.12,'SHT':0.28,'DEF':0.03,'MEN':0.10,'STA':
+}
+ATTR_ICONS={'SPD':' ','TEC':' ','PAS':' ','PHY':' ','SHT':' ','DEF':' ','MEN':' ','ST
+game_state=None
+nav_state={'tab':'dashboard','halftime_mode':False,'live_mode':False,'live_events':[]}
+dashboard_box=status_box=None
+# =========================================================
+# ユーティリティ
+# =========================================================
+def clamp(v,lo,hi): return max(lo,min(v,hi))
+def avg(vals): return sum(vals)/len(vals) if vals else 0
+def wc(items,weights): return random.choices(items,weights=weights,k=1)[0]
+def fmt_m(v): return f'${int(v):,}'
+def find_team(name):
+for d in game_state['divisions']:
+for t in game_state['divisions'][d]:
+if t['name']==name: return t
+return None
+def get_sel(): return find_team(game_state['selected_club']) if game_state['selected_club'] e
+def all_players(youth=False):
+pl=[]
+for d in game_state['divisions']:
+for t in game_state['divisions'][d]:
+pl+=t['players']
+if youth: pl+=t['youth']
+return pl
+def player_by_id(pid):
+for p in all_players(True):
+if p['id']==pid: return p
+for d in game_state['divisions']:
+for t in game_state['divisions'][d]:
+for p in t.get('loan_in',[]):
+if p['id']==pid: return p
+return None
+def div_of(name):
+for d in game_state['divisions']:
+for t in game_state['divisions'][d]:
+if t['name']==name: return d
+return None
+def sorted_table(div):
+return sorted(game_state['divisions'][div],key=lambda t:(t['season_stats']['pts'],t['seas
+def add_news(txt,cat='general'):
+game_state['news'].insert(0,{'text':txt,'cat':cat,'season':game_state['season'],'week':ga
+game_state['news']=game_state['news'][:200]
+def add_fin(cat,amt,note=''):
+game_state.setdefault('finance_logs',[]).insert(0,{'season':game_state['season'],'week':g
+game_state['finance_logs']=game_state['finance_logs'][:200]
+def add_sf(cat,amt):
+game_state['season_finance'][cat]=game_state['season_finance'].get(cat,0)+amt
+def has_skill(s): return s in game_state.get('manager_skills',[])
+def gain_exp(amt):
+game_state['manager_exp']=game_state.get('manager_exp',0)+amt
+pts=sum(1 for t in [50,120,220,350,500] if game_state['manager_exp']>=t)
+game_state['manager_skill_points']=max(0,pts-len(game_state.get('manager_skills',[])))
+def in_transfer_window():
+w=game_state['week']
+return any(lo<=w<=hi for lo,hi in TRANSFER_WINDOWS)
+def get_weather(): return game_state.get('current_weather','晴れ')
+def roll_weather():
+w=wc(['晴れ','曇り','雨','強風','雪'],[40,25,20,10,5])
+game_state['current_weather']=w; return w
+def check_achievement(key):
+done=game_state.setdefault('achievements',[])
+if key not in done and key in ACHIEVEMENTS:
+done.append(key); a=ACHIEVEMENTS[key]
+add_news(f' 実績解除: {a["icon"]}{a["name"]} — {a["desc"]}','club')
+# =========================================================
+# 選手・チーム生成
+# =========================================================
+def _recompute(p):
+w=OVR_WEIGHTS.get(p['pos'],{k:0.125 for k in p['attrs']})
+p['overall']=clamp(int(sum(p['attrs'].get(k,50)*v for k,v in w.items())),35,99)
+p['value']=int(p['overall']*2500+p['potential']*1800)
+p['wage']=int(1800+p['overall']*140)
+def gen_player(country,club,idx,youth=False):
+pos=random.choice(POSITIONS)
+attrs=copy.deepcopy(BASE_ATTRS[pos])
+lmod=(LEAGUE_STRENGTH.get(country,80)-80)*0.1
+for k in attrs: attrs[k]+=random.randint(-8,8)+int(lmod)
+if youth:
+pol=YOUTH_POLICIES.get(game_state['youth_policy'] if game_state else 'バランス',YOUTH_P
+attrs['SPD']=int(attrs['SPD']*pol['SPD']); attrs['TEC']=int(attrs['TEC']*pol['TEC'])
+attrs['PAS']=int(attrs['PAS']*pol['TEC']); attrs['PHY']=int(attrs['PHY']*pol['PHY'])
+fac=game_state['facilities']['youth'] if game_state else 1
+for k in attrs: attrs[k]-=random.randint(1,max(2,6-min(4,fac)))
+for k in attrs: attrs[k]=clamp(attrs[k],30,95)
+age=random.randint(16,18) if youth else random.randint(18,35)
+p={
+'id':f'{club}_{idx}_{random.randint(10000,99999)}',
+'name':f'{random.choice(COUNTRY_NAME_POOLS[country]["first"])} {random.choice(COUNTRY
+'club':club,'nationality':country,'pos':pos,'age':age,'attrs':attrs,
+'overall':50,'potential':0,
+'playstyle':random.choice(PLAY_STYLES[pos]),
+'personality':random.choice(PERSONALITIES),
+'trait':wc(['なし','勝負師','ムードメーカー','スペ体質'],[60,15,15,10]),
+'growth_type':wc(['早熟','標準','晩成'],[30,50,20]) if youth else None,
+'contract_years':random.randint(2,4) if youth else random.randint(1,5),
+'unhappiness':0,'injury_weeks':0,'injury_severity':'なし',
+'stamina':100,'morale':50,'is_wonderkid':False,'transfer_request':False,
+'state':'normal','state_weeks':0,'intl_weeks':0,
+'stats':{'apps':0,'goals':0,'assists':0,'mom':0,'clean_sheets':0,'yellow_cards':0,'re
+'value':0,'wage':0,
+'loan_club':None,'loan_origin':None,'loan_weeks':0,
+'buyback_fee':None,'buyback_club':None,
+'retiring':False,'training_focus':None,
+'has_agent':random.random()<0.3,'agent_fee_pct':random.choice([5,8,10]),
+# スカウトグレード（不確実性）
+'scout_grade':wc(['A','B','C','D','E'],[10,20,35,25,10]),
+# コンバート
+'original_pos':pos,'convert_weeks':0,
+# 希望ポジション
+'preferred_pos':pos,
+# プレー頻度希望
+'role_wish':'どちらでも', # 主力/控えでも/主力のみ
+# 代表帰還ブースト
+'intl_boost_pending':False,
+# 地元出身フラグ
+'is_local':random.random()<0.15,
+}
+_recompute(p); p['potential']=clamp(p['overall']+random.randint(5,20),p['overall'],95)
+if youth and random.random()<0.02:
+p['potential']=random.randint(88,94)
+for k in p['attrs']: p['attrs'][k]=clamp(p['attrs'][k]+random.randint(6,12),50,95)
+p['is_wonderkid']=True
+_recompute(p); return p
+def create_team(country,name,rmin=50,rmax=75):
+players=[gen_player(country,name,i) for i in range(18)]
+youth=[gen_player(country,name,1000+i,True) for i in range(random.randint(MIN_YOUTH,MAX_Y
+return {
+'name':name,'country':country,'players':players,'youth':youth,'loan_in':[],
+'budget':random.randint(700000,1600000),
+'reputation':random.randint(rmin,rmax),
+'fan_base':random.randint(8000,20000),
+'stadium_capacity':random.randint(12000,35000),
+'tactic':'バランス','formation':'4-4-2',
+'rivals':[],'board_expectation':'中位確保',
+'derby_record':{},'sponsor':None,'player_season_goal':None,
+'captain_id':None,'vip_level':0,'rank_history':[],
+'starting_xi':[],'preseason_done':False,
+'board_meeting_week':8,'naming_rights':None,
+'chemistry':50,'budget_transfer':0,'budget_facility':0,'budget_staff':0,
+# PKシューター・セットプレー担当
+'pk_taker_id':None,'ck_taker_id':None,'fk_taker_id':None,
+# 監督キャリア用
+'manager_offer_pending':False,
+# ローン記録
+'bank_loan':None,
+# 歴史記録
+'season_history':[],
+}
+def build_league(country):
+used=set()
+def rc(rmin,rmax): return [create_team(country,_rname(country,used),rmin,rmax) for divs={'D1':rc(62,78),'D2':rc(54,70),'D3':rc(46,64)}
+for div in divs:
+tms=divs[div]
+for i in range(0,len(tms),2):
+if i+1<len(tms):
+tms[i]['rivals'].append(tms[i+1]['name']); tms[i+1]['rivals'].append(tms[i]['
+for t in tms:
+if div=='D1': t['board_expectation']=wc(['優勝争い','上位進出','残留'],[20,35,45])
+elif div=='D2': t['board_expectation']=wc(['昇格争い','中位確保','残留'],[30,40,30])
+else: t['board_expectation']=wc(['昇格','上位進出','中位確保'],[30,35,35])
+return divs
+_ in r
+def _rname(country,used):
+pool=COUNTRY_NAME_POOLS[country]['clubs']
+suffs=['FC','United','City','SC','Athletic','Club']
+while True:
+n=f'{random.choice(pool)} {random.choice(suffs)}'
+if n not in used: used.add(n); return n
+def build_world(country):
+divs=build_league(country)
+return {
+'season':1,'week':1,
+'selected_country':country,'selected_club':'','selected_player_id':'',
+'divisions':divs,
+'news':[{'text':f'{country}で新しい世界を作成しました','cat':'general','season':1,'week':
+'transfer_offers':[],'foreign_offers':[],'loan_offers':[],'loan_out_requests':[],
+'season_awards':None,'history_awards':[],'club_hall_of_fame':[],'last_match':None,
+'manager_rating':50,'board_rating':50,'locker_room_mood':50,'fan_happiness':50,'club_
+'manager_exp':0,'manager_skill_points':0,'manager_skills':[],
+# 監督キャリア
+'manager_career':[], # [{club, season, div, rank}]
+'manager_career_offers':[],
+'facilities':{'youth':1,'training':1,'medical':1,'scouting':1,'stadium':1},
+'staff':[],'international_cup':None,
+'youth_policy':'バランス','youth_decision_queue':[],
+'season_finance':{k:0 for k in ['sponsor','matchday','transfers_in','transfers_out','
+'pending_sponsor_negotiation':None,
+'manager_fired':False,'season_goal_declared':False,
+'domestic_cup':None,'pending_press':False,'press_effect':None,
+'intl_call_queue':[],'financial_crisis':False,
+'rank_history':[],'current_weather':'晴れ',
+'preseason_phase':True,
+'pending_lineup':False,'halftime_data':None,
+'pending_board_meeting':False,
+'buyout_offer':None,'achievements':[],'training_results':[],
+'win_streak':0,'clean_streak':0,'youth_promoted_count':0,'wonderkid_found':0,
+# ランダムイベントキュー
+'pending_event':None,
+'event_history':[],
+# テキスト実況
+'live_commentary':[],
+# クラブ歴史書
+'club_history':[],
+'news_filter':'全て',
+# 複数週一括進行中フラグ
+'bulk_advancing':False,'bulk_weeks_left':0,
+# 銀行ローン
+'bank_loans':[],
+# 選手保険
+'injury_insurance_active':False,
+# 肖像権収入
+'portrait_income_weekly':0,
+# 海外スカウト派遣
+'overseas_scout':None,
+# win_bonus支払い記録
+'last_match_won':False,
+}
+def init_stats():
+for d in game_state['divisions']:
+for t in game_state['divisions'][d]:
+if 'season_stats' not in t:
+t['season_stats']={'p':0,'w':0,'d':0,'l':0,'gf':0,'ga':0,'gd':0,'pts':0}
+# =========================================================
+# スターティングイレブン
+# =========================================================
+def best_lineup(team,override_xi=None):
+pool=team['players']+team.get('loan_in',[])
+avail=[p for p in pool if p['injury_weeks']<=0 and p.get('intl_weeks',0)<=0]
+if not avail: return pool[:11]
+xi_ids=override_xi or team.get('starting_xi',[])
+if xi_ids:
+xi=[p for p in avail if p['id'] in xi_ids]
+if len(xi)<11:
+rest=sorted([p for p in avail if p['id'] not in xi_ids],key=lambda p:p['overall']
+xi+=rest[:11-len(xi)]
+return xi[:11]
+req=FORMATIONS.get(team.get('formation','4-4-2'),FORMATIONS['4-4-2'])
+lineup=[]; rem=list(avail)
+for pos,cnt in req.items():
+chosen=sorted([p for p in rem if p['pos']==pos],key=lambda p:p['overall'],reverse=Tru
+lineup+=chosen
+for p in chosen: rem.remove(p)
+if len(lineup)<11:
+lineup+=sorted(rem,key=lambda p:p['overall'],reverse=True)[:11-len(lineup)]
+return lineup[:11]
+def set_starting_xi(player_ids):
+sel=get_sel()
+if not sel: return
+sel['starting_xi']=player_ids[:11]; game_state['pending_lineup']=False
+add_news('スターティングイレブンを設定','match'); refresh_ui()
+def auto_lineup():
+sel=get_sel()
+if not sel: return
+sel['starting_xi']=[]; game_state['pending_lineup']=False
+add_news('ラインナップを自動選出に設定','match'); refresh_ui()
+# =========================================================
+# 試合強度計算（ホーム補正追加）
+# =========================================================
+def team_str(team,opp=None,tactic_override=None,is_home=False):
+lu=best_lineup(team)
+if not lu: return 40
+base=avg([p['overall'] for p in lu])
+league_b=(LEAGUE_STRENGTH.get(team.get('country','England'),80)-80)*0.05
+morale_b=avg([p['morale'] for p in lu])*0.05
+stamina_b=avg([p['stamina'] for p in lu])*0.03
+style_b=sum({'ストライカー':0.30,'ポーチャー':0.22,'プレイメーカー':0.25,'ディストラクター':0.22,'
+derby_b=2.5 if opp and opp['name'] in team.get('rivals',[]) else 0
+# ホーム補正
+home_b=2.5 if is_home else 0
+fac_b=game_state['facilities']['training']*0.8+game_state['facilities']['medical']*0.2
+tn=tactic_override or team.get('tactic','バランス')
+tac=TACTICS.get(tn,TACTICS['バランス'])
+tac_b=(tac['atk']+tac['def'])/2*base*0.05-base*0.05
+staff_b=sum(s['skill']*0.01 for s in game_state['staff'] if s['type']=='ヘッドコーチ')
+staff_b+=sum(s['skill']*0.005 for s in game_state['staff'] if s['type']=='フィジオ')
+brand_b=(game_state['club_brand']-50)*0.02
+frm=FORMATIONS.get(team.get('formation','4-4-2'),FORMATIONS['4-4-2'])
+pos_cnt={p['pos']:0 for p in lu}
+for p in lu: pos_cnt[p['pos']]=pos_cnt.get(p['pos'],0)+1
+frm_b=sum(0.3 for pos,cnt in frm.items() if pos_cnt.get(pos,0)>=cnt)
+skill_b=base*0.10 if has_skill('戦術家') else 0
+cap_id=team.get('captain_id')
+cap_b=0
+if cap_id:
+cap=next((p for p in lu if p['id']==cap_id),None)
+if cap: cap_b=CAPTAIN_EFFECTS.get(cap['personality'],{}).get('morale',0)*0.1
+# セットプレー担当者ボーナス（CK/FKのTEC・SHT属性を反映）
+setpiece_b=0
+ck_id=team.get('ck_taker_id')
+fk_id=team.get('fk_taker_id')
+if ck_id:
+ck=next((p for p in lu if p['id']==ck_id),None)
+if ck: setpiece_b+=ck['attrs'].get('TEC',50)*0.015
+if fk_id:
+fk=next((p for p in lu if p['id']==fk_id),None)
+if fk: setpiece_b+=fk['attrs'].get('SHT',50)*0.012
+state_b=(avg([1.1 if p.get('state')=='hot' else(0.9 if p.get('state')=='slump' else 1.0)
+chem_b=(team.get('chemistry',50)-50)*0.01
+weather=WEATHER.get(get_weather(),WEATHER['晴れ'])
+weather_b=(weather['atk_mod']-1.0)*base
+# コンバート中ペナルティ
+convert_penalty=sum(3 for p in lu if p.get('convert_weeks',0)>0)
+return base+league_b+morale_b+stamina_b+style_b+derby_b+home_b+fac_b+tac_b+staff_b+brand_
+# =========================================================
+# テキスト実況生成
+# =========================================================
+def gen_live_events(ta,tb,ga1,gb1,ga2,gb2,cards,weather):
+events=[]
+t=0
+events.append({'t':t,'txt':f' # 前半ゴール
+キックオフ！ {ta["name"]} vs {tb["name"]} | 天候:{weather}'
+for i in range(ga1):
+t=random.randint(5,44)
+scorer=random.choice(best_lineup(ta))
+events.append({'t':t,'txt':f' GOAL! {ta["name"]} | {scorer["name"]} ({t}\') for i in range(gb1):
+t=random.randint(5,44)
+scorer=random.choice(best_lineup(tb))
+events.append({'t':t,'txt':f' events.append({'t':45,'txt':f' # カード
+GOAL! {tb["name"]} | {scorer["name"]} ({t}\')'})
+ハーフタイム | {ta["name"]} {ga1}-{gb1} {tb["name"]}'})
+for col,name in cards[:3]:
+t=random.randint(46,89)
+events.append({'t':t,'txt':f'{col} カード: {name} ({t}\')'})
+# 後半ゴール
+for i in range(ga2):
+{i+1}-
+t=random.randint(46,90)
+scorer=random.choice(best_lineup(ta))
+events.append({'t':t,'txt':f' for i in range(gb2):
+t=random.randint(46,90)
+GOAL! {ta["name"]} | {scorer["name"]} ({t}\')'})
+scorer=random.choice(best_lineup(tb))
+events.append({'t':t,'txt':f' if random.random()<0.12:
+GOAL! {tb["name"]} | {scorer["name"]} ({t}\')'})
+t=random.randint(90,93)
+events.append({'t':t,'txt':f' アディショナルタイム弾！ ({t}+)'})
+events.append({'t':95,'txt':f' 試合終了 | {ta["name"]} {ga1+ga2}-{gb1+gb2} {tb["name"]}'
+events.sort(key=lambda e:e['t'])
+return events
+# =========================================================
+# 試合シミュレーション（PKシュートアウト対応）
+# =========================================================
+def simulate_pk_shootout(ta,tb):
+"""PKシューターアウト（カップ戦延長後）"""
+pk_a=ta.get('pk_taker_id')
+pk_b=tb.get('pk_taker_id')
+taker_a=next((p for p in ta['players'] if p['id']==pk_a),None) if pk_a else None
+taker_b=next((p for p in tb['players'] if p['id']==pk_b),None) if pk_b else None
+shot_a=taker_a['attrs'].get('SHT',60)/100 if taker_a else 0.65
+shot_b=taker_b['attrs'].get('SHT',60)/100 if taker_b else 0.65
+score_a=sum(1 for _ in range(5) if random.random()<shot_a)
+score_b=sum(1 for _ in range(5) if random.random()<shot_b)
+while score_a==score_b:
+score_a+=1 if random.random()<shot_a else 0
+score_b+=1 if random.random()<shot_b else 0
+winner=ta if score_a>score_b else tb
+return winner,score_a,score_b
+def simulate_half(ta,tb,tactic_a=None,tactic_b=None,home_team=None):
+sa=team_str(ta,tb,tactic_a,is_home=(home_team==ta['name']))
+sb=team_str(tb,ta,tactic_b,is_home=(home_team==tb['name']))
+ga=min(4,max(0,int(round(random.gauss(sa/48,0.7)))))
+gb=min(4,max(0,int(round(random.gauss(sb/48,0.7)))))
+return ga,gb
+def simulate_match_full(ta,tb,cup=False,ht_tac_a=None,ht_tac_b=None,substitutions_a=None):
+derby=tb['name'] in ta.get('rivals',[])
+weather=get_weather(); wdat=WEATHER.get(weather,WEATHER['晴れ'])
+ga1,gb1=simulate_half(ta,tb,home_team=ta['name'])
+# 交代処理（ハーフタイム）
+if substitutions_a:
+_apply_substitutions(ta,substitutions_a)
+ga2,gb2=simulate_half(ta,tb,ht_tac_a,None,home_team=ta['name'])
+ga=min(8,ga1+ga2); gb=min(8,gb1+gb2)
+# カップ戦PKシュートアウト
+pk_result=None
+if cup and ga==gb:
+# 延長戦
+gex_a,gex_b=simulate_half(ta,tb,home_team=ta['name'])
+ga+=gex_a; gb+=gex_b
+if ga==gb:
+winner,sa_pk,sb_pk=simulate_pk_shootout(ta,tb)
+pk_result={'winner':winner['name'],'score_a':sa_pk,'score_b':sb_pk}
+if winner['name']==ta['name']: ga+=1
+else: gb+=1
+add_news(f' PKシュートアウト: {ta["name"]} {sa_pk}-{sb_pk} {tb["name"]} → {winner[
+if winner['name']==game_state['selected_club']: check_achievement('pk_hero')
+sa=team_str(ta,tb,is_home=True); sb=team_str(tb,ta)
+shots_a=max(3,int(sa/5.5)+random.randint(-2,3)); shots_b=max(3,int(sb/5.5)+random.randint
+tot=max(1,sa+sb); pa=clamp(int(sa/tot*100+random.randint(-6,6)),34,66)
+stats={'team_a':{'name':ta['name'],'shots':shots_a,'on_target':min(shots_a,max(ga,int(sho
+mom,sclog,cards=_match_stats_full(ta,tb,ga,gb,wdat)
+# win_bonus支払い
+if ta['name']==game_state['selected_club'] and ga>gb:
+_pay_win_bonus(ta)
+elif tb['name']==game_state['selected_club'] and gb>ga:
+_pay_win_bonus(tb)
+hl=[]
+if weather not in ['晴れ','曇り']: hl.append(f' {weather}の中での試合')
+if derby: hl.append(' ダービーマッチ')
+if abs(ga-gb)>=3: hl.append('一方的な試合展開')
+if random.random()<0.18: hl.append('スーパーセーブ')
+if random.random()<0.12: hl.append('ポスト直撃')
+if random.random()<0.08: hl.append(' VARチェック発生')
+if ga1<gb1 and ga>gb: hl.append(' 逆転劇！')
+if random.random()<0.12: hl.append(' ロスタイムの劇的展開')
+if pk_result: hl.append(f' PKシュートアウト({pk_result["score_a"]}-{pk_result["score_b"]})
+att=_attendance(ta,tb,derby,wdat); rev=_match_income(ta,att)
+res_a='win' if ga>gb else('draw' if ga==gb else 'loss')
+res_b='loss' if res_a=='win' else('draw' if res_a=='draw' else 'win')
+_update_fanbase(ta,res_a,derby); _update_fanbase(tb,res_b,derby)
+_update_table(ta,ga,gb); _update_table(tb,gb,ga)
+if derby:
+ra=ta.setdefault('derby_record',{}).setdefault(tb['name'],{'w':0,'d':0,'l':0})
+rb=tb.setdefault('derby_record',{}).setdefault(ta['name'],{'w':0,'d':0,'l':0})
+if ga>gb: ra['w']+=1;rb['l']+=1
+elif ga==gb: ra['d']+=1;rb['d']+=1
+else: ra['l']+=1;rb['w']+=1
+_fatigue_weather(ta,wdat); _fatigue_weather(tb,wdat)
+# テキスト実況イベント生成
+live_evts=gen_live_events(ta,tb,ga1,gb1,ga2,gb2,cards,weather)
+game_state['live_commentary']=live_evts
+return ga,gb,att,rev,stats,{'mom':mom,'scorers':sclog,'highlights':hl,'derby':derby,'weat
+def _pay_win_bonus(team):
+sp=team.get('sponsor')
+if not sp: return
+bonus=sp.get('win_bonus',0)
+if bonus>0:
+team['budget']+=bonus; add_fin('スポンサー勝利ボーナス',bonus,sp['name']); add_sf('sponso
+if team['name']==game_state['selected_club']:
+add_news(f' スポンサー勝利ボーナス: {fmt_m(bonus)}','club')
+def _apply_substitutions(team,subs):
+"""ハーフタイム交代: [(out_id, in_id), ...]"""
+for out_id,in_id in subs[:3]:
+out_p=next((p for p in team['players'] if p['id']==out_id),None)
+in_p=next((p for p in team['players'] if p['id']==in_id and p['id'] not in team.get('
+if out_p and in_p and out_id in team.get('starting_xi',[]):
+xi=list(team.get('starting_xi',[])); xi.remove(out_id); xi.append(in_id); team['s
+def _match_stats_full(ta,tb,ga,gb,wdat):
+lu_a=best_lineup(ta); lu_b=best_lineup(tb)
+for p in lu_a: p['stats']['apps']+=1; p['stats']['shots']=p['stats'].get('shots',0)+rando
+for p in lu_b: p['stats']['apps']+=1; p['stats']['shots']=p['stats'].get('shots',0)+rando
+for p in lu_a:
+if p['pos']=='GK': p['stats']['saves']=p['stats'].get('saves',0)+gb
+if p['pos']=='DF': p['stats']['tackles']=p['stats'].get('tackles',0)+random.randint(1
+for p in lu_b:
+if p['pos']=='GK': p['stats']['saves']=p['stats'].get('saves',0)+ga
+if p['pos']=='DF': p['stats']['tackles']=p['stats'].get('tackles',0)+random.randint(1
+if gb==0:
+for p in lu_a:
+if p['pos']=='GK': p['stats']['clean_sheets']=p['stats'].get('clean_sheets',0)+1
+if ga==0:
+for p in lu_b:
+if p['pos']=='GK': p['stats']['clean_sheets']=p['stats'].get('clean_sheets',0)+1
+contrib={p['id']:0 for p in lu_a+lu_b}; sclog=[]
+for _ in range(ga):
+weights=[PLAYER_STATES.get(p.get('state','normal'),PLAYER_STATES['normal'])['goal_mul
+sc=random.choices(lu_a,weights=weights,k=1)[0]
+sc['stats']['goals']+=1; contrib[sc['id']]+=4
+if sc.get('trait')=='勝負師': contrib[sc['id']]+=1
+ast=random.choice(lu_a)
+if ast['id']!=sc['id']: ast['stats']['assists']+=1; contrib[ast['id']]+=2
+sclog.append((ta['name'],sc['name']))
+for _ in range(gb):
+weights=[PLAYER_STATES.get(p.get('state','normal'),PLAYER_STATES['normal'])['goal_mul
+sc=random.choices(lu_b,weights=weights,k=1)[0]
+sc['stats']['goals']+=1; contrib[sc['id']]+=4
+if sc.get('trait')=='勝負師': contrib[sc['id']]+=1
+ast=random.choice(lu_b)
+if ast['id']!=sc['id']: ast['stats']['assists']+=1; contrib[ast['id']]+=2
+sclog.append((tb['name'],sc['name']))
+cards=[]
+for p in lu_a+lu_b:
+if random.random()<0.08*wdat.get('injury_mod',1.0):
+p['stats']['yellow_cards']=p['stats'].get('yellow_cards',0)+1
+cards.append((' ',p['name']))
+if p['stats']['yellow_cards']%5==0: p['injury_weeks']=max(p['injury_weeks'],1)
+if random.random()<0.01:
+p['stats']['red_cards']=p['stats'].get('red_cards',0)+1
+cards.append((' ',p['name'])); p['injury_weeks']=max(p['injury_weeks'],1)
+mom=max(lu_a+lu_b,key=lambda p:contrib[p['id']]+p['overall']*0.1+random.uniform(0,1.5))
+mom['stats']['mom']+=1; return mom,sclog,cards
+def _update_table(t,gf,ga):
+s=t['season_stats']; s['p']+=1; s['gf']+=gf; s['ga']+=ga; s['gd']=s['gf']-s['ga']
+if gf>ga: s['w']+=1;s['pts']+=3
+elif gf==ga: s['d']+=1;s['pts']+=1
+else: s['l']+=1
+def _update_fanbase(t,res,derby=False):
+ch={'win':random.randint(120,260),'draw':random.randint(-30,60),'loss':random.randint(-22
+if derby: ch*=2
+t['fan_base']=max(2000,t['fan_base']+ch)
+def _attendance(ta,tb,derby=False,wdat=None):
+att=int(ta['fan_base']*random.uniform(0.65,1.10))+(ta['reputation']+tb['reputation'])//2*
+if derby: att=int(att*1.35)
+att=int(att*(1+game_state['facilities']['stadium']*0.02+(game_state['club_brand']-50)*0.0
+if wdat: att=int(att*wdat.get('att_mod',1.0))
+return min(att,ta['stadium_capacity'])
+def _match_income(ht,att):
+ticket=random.randint(18,28)
+vip_bonus=ht.get('vip_level',0)*random.randint(8000,15000)
+nr_bonus=50000 if ht.get('naming_rights') else 0
+rev=att*ticket+vip_bonus+nr_bonus
+ht['budget']+=rev; add_fin('観客収入',rev,'ホームゲーム'); add_sf('matchday',rev); return rev
+def _fatigue_weather(team,wdat):
+tr=game_state['facilities']['training']
+for p in best_lineup(team):
+loss=max(3,int(random.randint(6,12)-(tr*0.3))); loss=int(loss*wdat.get('injury_mod',1
+p['stamina']=clamp(p['stamina']-loss,20,100)
+res=_injure_weather(team,wdat)
+if res and team['name']==game_state['selected_club']:
+p,sev=res; add_news(f'⚕ {p["name"]}が{sev}（{p["injury_weeks"]}週間）','injury')
+def _injure_weather(team,wdat):
+med=game_state['facilities']['medical']
+phys=sum(s['skill']*0.002 for s in game_state['staff'] if s['type']=='フィジオ')
+cands=[p for p in team['players']+team.get('loan_in',[]) if p['injury_weeks']<=0]
+if not cands: return None
+for p in cands:
+risk=0.20 if p.get('trait')=='スペ体質' else 0.10
+risk*=(1-med*0.05-phys)*wdat.get('injury_mod',1.0); risk=max(0.02,risk)
+if random.random()<risk/len(cands):
+r=random.random()
+if r<0.60: weeks,sev=random.randint(1,2),'軽傷'
+elif r<0.85: weeks,sev=random.randint(3,8),'中傷'
+else: weeks,sev=random.randint(9,20),'重傷'
+if p.get('trait')=='スペ体質': weeks=int(weeks*1.5)
+p['injury_weeks']=weeks; p['injury_severity']=sev
+# 保険支払い
+if game_state.get('injury_insurance_active') and sev in ['中傷','重傷']:
+payout=int(p['wage']*weeks*0.5); get_sel()['budget']+=payout
+add_news(f' 選手保険支払い: {p["name"]} {fmt_m(payout)}','club')
+return p,sev
+return None
+# =========================================================
+# 選手状態・ケミストリー
+# =========================================================
+def update_player_states(team):
+for p in team['players']+team.get('loan_in',[]):
+if p.get('state','normal')!='normal':
+p['state_weeks']=p.get('state_weeks',0)-1
+if p['state_weeks']<=0:
+p['state']='normal'; p['state_weeks']=0
+elif random.random()<0.04:
+state=random.choice(['hot','slump']); dur=random.randint(2,5)
+p['state']=state; p['state_weeks']=dur
+if team['name']==game_state['selected_club']:
+add_news(f' {p["name"]}が{PLAYER_STATES[state]["label"]}！({dur}週間)','playe
+# 代表帰還ブースト
+if p.get('intl_boost_pending') and p.get('intl_weeks',0)<=0:
+for k in ['SHT','TEC','MEN']: p['attrs'][k]=clamp(p['attrs'][k]+random.randint(1,
+_recompute(p); p['intl_boost_pending']=False
+add_news(f' {p["name"]}が代表経験で成長！','player')
+# コンバート進行
+if p.get('convert_weeks',0)>0:
+p['convert_weeks']-=1
+if p['convert_weeks']==0:
+p['pos']=p.get('target_pos',p['pos']); _recompute(p)
+add_news(f'{p["name"]}のコンバート完了 → {p["pos"]}','player')
+def update_chemistry(team):
+pl=team['players']
+if not pl: return
+nat_counts={}
+for p in pl: nat_counts[p['nationality']]=nat_counts.get(p['nationality'],0)+1
+dom_ratio=max(nat_counts.values())/len(pl)
+young=sum(1 for p in pl if p['age']<=24); old=sum(1 for p in pl if p['age']>=32)
+age_balance=1.0-(abs(young-old)/max(1,len(pl)))*0.5
+cap_bonus=5 if team.get('captain_id') else 0
+mood_bonus=sum(3 for p in pl if p.get('trait')=='ムードメーカー')
+local_bonus=sum(2 for p in pl if p.get('is_local'))
+team['chemistry']=clamp(int(50+dom_ratio*20+age_balance*10+cap_bonus+mood_bonus+local_bon
+def update_player_feelings(team,won=False,drew=False,lost=False):
+mood_d=0
+for p in team['players']+team.get('loan_in',[]):
+d=2 if lost else(-1 if won else 0)
+pers=p.get('personality','')
+if pers=='野心家' and div_of(team['name']) in ['D2','D3'] and team['reputation']<68: d
+if pers=='気分屋': d+=random.choice([-1,0,1,2])
+if pers=='忠誠心高い': d-=1
+if pers=='ムードメーカー': mood_d+=1
+if pers=='短気' and lost: d+=2
+# 役割不満（主力のみ希望なのにスタメン外）
+xi_set=set(team.get('starting_xi',[]))
+if p.get('role_wish')=='主力のみ' and xi_set and p['id'] not in xi_set: d+=2
+p['unhappiness']=clamp(p.get('unhappiness',0)+d,0,100)
+p['morale']=clamp(p['morale']+(clamp(100-p['unhappiness'],0,100)-p['morale'])*0.15,0,
+if p['unhappiness']>=80 and not p.get('transfer_request'):
+p['transfer_request']=True
+if team['name']==game_state['selected_club']:
+add_news(f' {p["name"]}が移籍要求（不満{p["unhappiness"]}）','transfer')
+cap_id=team.get('captain_id')
+if cap_id:
+cap=next((p for p in team['players'] if p['id']==cap_id),None)
+if cap: mood_d+=CAPTAIN_EFFECTS.get(cap['personality'],{}).get('locker_room',0)
+base_mood=100-avg([p['unhappiness'] for p in team['players']])+mood_d
+if won: base_mood+=4
+elif lost: base_mood-=4
+game_state['locker_room_mood']=clamp(int(base_mood),0,100)
+def update_fan_happiness(team,won=False,drew=False,lost=False):
+d=4 if won else(1 if drew else -4)
+obj=team.get('board_expectation','')
+tbl=sorted_table(div_of(team['name']))
+rank=next((i+1 for i,t in enumerate(tbl) if t['name']==team['name']),10)
+if obj=='優勝争い': d+=2 if rank<=3 else(-2 if rank>=7 else 0)
+elif obj=='上位進出': d+=2 if rank<=5 else(-2 if rank>=8 else 0)
+elif obj in ['昇格争い','昇格']: d+=2 if rank<=3 else(-2 if rank>=7 else 0)
+elif obj=='残留': d+=1 if rank<=7 else -2
+elif obj=='中位確保': d+=1 if 4<=rank<=7 else(-2 if rank>=9 else 0)
+if game_state['club_brand']>=70: d+=1
+elif game_state['club_brand']<=30: d-=1
+game_state['fan_happiness']=clamp(game_state['fan_happiness']+d,0,100)
+def update_manager_rating(team,won=False,drew=False,lost=False):
+d=3 if won else(1 if drew else -3)
+if has_skill('鉄のメンタル') and lost: d=int(d*0.5)
+tbl=sorted_table(div_of(team['name']))
+rank=next((i+1 for i,t in enumerate(tbl) if t['name']==team['name']),10)
+obj=team.get('board_expectation','')
+if obj=='優勝争い' and rank<=3: d+=2
+elif obj=='上位進出' and rank<=5: d+=2
+elif obj in ['昇格争い','昇格'] and rank<=2: d+=3
+elif obj=='残留' and rank>=9: d-=3
+elif obj=='中位確保' and rank>=9: d-=2
+if game_state['locker_room_mood']>=70: d+=1
+elif game_state['locker_room_mood']<=30: d-=2
+game_state['manager_rating']=clamp(game_state['manager_rating']+d,0,100)
+gain_exp(2 if won else(1 if drew else 0))
+if game_state['manager_rating']<=25 and game_state['board_rating']<=30 and not game_state
+game_state['manager_fired']=True; add_news(' 監督解任危機！','club')
+def update_board_rating(team):
+tbl=sorted_table(div_of(team['name']))
+rank=next((i+1 for i,t in enumerate(tbl) if t['name']==team['name']),10)
+d=4 if rank<=3 else(1 if rank<=6 else(-4 if rank>=9 else 0))
+if team['budget']>800000: d+=1
+elif team['budget']<100000: d-=2
+game_state['board_rating']=clamp(game_state['board_rating']+d,0,100)
+team['reputation']=clamp(team.get('reputation',60)+(3 if rank<=2 else(1 if rank<=4 bd=2 if rank<=3 else(-1 if rank>=8 else 0)
+if team['budget']>1000000: bd+=1
+game_state['club_brand']=clamp(game_state['club_brand']+bd,0,100)
+if team['budget']<-200000 and not game_state['financial_crisis']:
+else(-
+game_state['financial_crisis']=True; add_news(' 財政危機！','club')
+elif team['budget']>0 and game_state['financial_crisis']:
+game_state['financial_crisis']=False; add_news('財政が回復しました','club')
+_check_buyout(team)
+# 肖像権収入更新
+stars=sum(1 for p in team['players'] if p['overall']>=80)
+game_state['portrait_income_weekly']=stars*random.randint(5000,12000)
+# =========================================================
+# 収入・支出
+# =========================================================
+def weekly_expenses(team):
+fac=sum(game_state['facilities'].values())*5000
+wage=sum(p['wage'] for p in team['players'])
+loan_w=sum(p['wage']//2 for p in team.get('loan_in',[]))
+staff=sum(s['salary'] for s in game_state['staff'])
+# 銀行ローン返済
+loan_payment=0
+for loan in game_state['bank_loans']:
+loan['remaining_weeks']=loan.get('remaining_weeks',1)-1
+weekly=int(int(loan['amount']/loan['weeks'])*(1+loan['interest_rate']))
+loan_payment+=weekly; team['budget']-=weekly; add_sf('loan_interest',int(weekly))
+total=fac+wage+loan_w+staff
+team['budget']-=total
+add_fin('クラブ運営費',-total,'週次支出'); add_sf('wages',wage+loan_w); add_sf('facility',fa
+game_state['bank_loans']=[l for l in game_state['bank_loans'] if l.get('remaining_weeks',
+dn=div_of(team['name']); cap=SALARY_CAP.get(dn,999999)
+if wage>cap:
+penalty=int((wage-cap)*0.1); team['budget']-=penalty
+add_news(f' 給与上限超過ペナルティ: {fmt_m(penalty)}','club')
+def weekly_sponsor(team):
+if not team.get('sponsor'): team['sponsor']=_gen_sponsor(team['country'],div_of(team['nam
+sp=team['sponsor']; inc=sp['weekly_income']
+if has_skill('財務手腕'): inc=int(inc*1.10)
+team['budget']+=inc; add_fin('スポンサー収入',inc,sp['name']); add_sf('sponsor',inc)
+def weekly_broadcast(team):
+d=div_of(team['name']); base={'D1':30000,'D2':15000,'D3':5000}.get(d,0)
+rev=int(base*(1+(team['reputation']-60)*0.01)); team['budget']+=rev; add_sf('broadcast',r
+def weekly_merch(team):
+# グッズ収入修正（係数を0.02に）
+rev=int(team['fan_base']*game_state['club_brand']*0.02)
+team['budget']+=rev; add_sf('merch',rev)
+def weekly_naming_rights(team):
+nr=team.get('naming_rights')
+if nr: team['budget']+=nr['weekly']; add_sf('naming_rights',nr['weekly'])
+def weekly_portrait_income(team):
+inc=game_state.get('portrait_income_weekly',0)
+if inc>0: team['budget']+=inc; add_sf('merch',inc)
+0)
+def weekly_overseas_scout(team):
+os_data=game_state.get('overseas_scout')
+if not os_data: return
+os_data['weeks_left']=os_data.get('weeks_left',4)-1
+if os_data['weeks_left']<=0:
+# 海外スカウトの結果
+country=os_data['country']
+ps=[gen_player(country,'OverseasPool',random.randint(500000,599999)) for _ in range(5
+for p in ps:
+sb=game_state['facilities']['scouting']*3+(3 if has_skill('スカウト眼') else for k in p['attrs']: p['attrs'][k]=clamp(p['attrs'][k]+random.randint(0,sb),30,99
+_recompute(p)
+# スカウト不確実性
+p['scout_ovr_min']=max(35,p['overall']-10)
+p['scout_ovr_max']=min(99,p['overall']+10)
+game_state['overseas_pool']=ps
+game_state['overseas_scout']=None
+add_news(f' 海外スカウト({country})帰還！{len(ps)}名の候補を発見','player')
+refresh_ui()
+def recover_players():
+for p in all_players(True):
+if p['injury_weeks']>0:
+p['injury_weeks']-=1
+if p['injury_weeks']==0: p['injury_severity']='なし'
+if p.get('intl_weeks',0)>0: p['intl_weeks']-=1
+p['stamina']=clamp(p['stamina']+random.randint(5,12),40,100)
+def apply_individual_training(team):
+tr_lv=game_state['facilities']['training']; results=[]
+for p in team['players']:
+focus=p.get('training_focus')
+if not focus or focus not in p['attrs']: continue
+if random.random()<(0.3+tr_lv*0.1):
+p['attrs'][focus]=clamp(p['attrs'][focus]+1,30,99); _recompute(p)
+results.append(f'{p["name"]}の{ATTR_ICONS.get(focus,focus)}{focus}が+1向上')
+if results: game_state['training_results']=results[-5:]
+def check_retirements(team):
+for p in list(team['players']):
+if p['age']>=35 and not p.get('retiring') and random.random()<(p['age']-34)*0.12:
+p['retiring']=True; add_news(f' {p["name"]}が今季引退を発表（{p["age"]}歳）','player
+if p.get('retiring') and p['age']>=36 and random.random()<0.6:
+team['players'].remove(p)
+score=p['stats']['goals']*3+p['stats']['assists']*2+p['stats']['mom']*4
+game_state['club_hall_of_fame'].append({'name':p['name'],'score':score,'reason':'
+add_news(f' {p["name"]}が現役引退','player')
+# =========================================================
+# ランダムイベント
+# =========================================================
+def gen_random_event():
+sel=get_sel()
+if not sel or random.random()>0.20: return
+if game_state.get('pending_event'): return
+evt_template=random.choice(RANDOM_EVENTS)
+# プレースホルダー埋め
+player=random.choice(sel['players']) if sel['players'] else None
+rival=sel['rivals'][0] if sel.get('rivals') else 'ライバル'
+text=evt_template['text'].replace('{name}',player['name'] if player else '選手').replace('
+event={'id':evt_template['id'],'text':text,'choices':evt_template['choices'],'effects':ev
+game_state['pending_event']=event
+add_news(f' イベント発生: {text}','club')
+def resolve_event(choice):
+evt=game_state.get('pending_event')
+if not evt: return
+effs=evt['effects'].get(choice,{})
+sel=get_sel()
+if not sel: return
+pid=evt.get('player_id')
+p=player_by_id(pid) if pid else None
+for k,v in effs.items():
+if k=='fan_happiness': game_state['fan_happiness']=clamp(game_state['fan_happiness']+
+elif k=='locker_room_mood': game_state['locker_room_mood']=clamp(game_state['locker_r
+elif k=='manager_rating': game_state['manager_rating']=clamp(game_state['manager_rati
+elif k=='board_rating': game_state['board_rating']=clamp(game_state['board_rating']+v
+elif k=='club_brand': game_state['club_brand']=clamp(game_state['club_brand']+v,0,100
+elif k=='fan_base' and sel: sel['fan_base']+=v
+elif k=='budget' and sel: sel['budget']+=v; add_fin('イベント支出',v,evt['text'])
+elif k=='morale_player' and p: p['morale']=clamp(p.get('morale',50)+v,0,100)
+elif k=='unhappiness_player' and p: p['unhappiness']=clamp(p.get('unhappiness',0)+v,0
+elif k=='attr_boost' and p:
+attr=random.choice(list(p['attrs'].keys())); p['attrs'][attr]=clamp(p['attrs'][at
+elif k=='injury_minor' and p: p['injury_weeks']=max(p['injury_weeks'],random.randint(
+elif k=='new_staff':
+game_state['staff'].append({'type':'ヘッドコーチ','skill':random.randint(60,80),'sa
+elif k=='transfer_youth' and p:
+if sel and p in sel['youth']: sel['youth'].remove(p); sel['budget']+=int(p['value
+game_state['event_history'].append({'text':evt['text'],'choice':choice,'season':game_stat
+game_state['pending_event']=None
+add_news(f'イベント対応:「{choice}」','club'); refresh_ui()
+# =========================================================
+# 銀行ローン・保険
+# =========================================================
+def take_bank_loan(amount):
+sel=get_sel()
+if not sel: return
+weeks=random.choice([12,18,24]); rate=random.choice([0.03,0.05,0.08])
+loan={'amount':amount,'weeks':weeks,'interest_rate':rate,'remaining_weeks':weeks}
+game_state['bank_loans'].append(loan); sel['budget']+=amount
+add_fin('銀行ローン',amount,f'返済{weeks}週 金利{int(rate*100)}%'); add_news(f'銀行ローン: {fm
+def activate_insurance():
+sel=get_sel()
+if not sel: return
+cost=8000
+if sel['budget']<cost: ui.notify('予算不足'); return
+sel['budget']-=cost; game_state['injury_insurance_active']=True
+add_fin('選手保険料',-cost,'週次'); add_news(' 選手保険を契約（重傷時に給与補償）','club'); refr
+# =========================================================
+# 監督キャリア
+# =========================================================
+def gen_manager_offers():
+"""高評価時に他クラブからオファー"""
+if game_state['manager_rating']<70: return
+if game_state.get('manager_career_offers'): return
+candidates=[]
+for d in game_state['divisions']:
+for t in game_state['divisions'][d]:
+if t['name']==game_state['selected_club']: continue
+if t['reputation']>get_sel().get('reputation',50) and random.random()<0.05:
+candidates.append(t['name'])
+if candidates:
+game_state['manager_career_offers']=candidates[:2]
+add_news(f' 監督オファー: {", ".join(candidates[:2])}','club')
+def accept_manager_offer(new_club_name):
+sel=get_sel()
+if not sel: return
+dn=div_of(sel['name']); tbl=sorted_table(dn)
+rank=next((i+1 for i,t in enumerate(tbl) if t['name']==sel['name']),10)
+# キャリア記録
+game_state['manager_career'].append({'club':sel['name'],'season':game_state['season'],'di
+game_state['selected_club']=new_club_name
+game_state['manager_career_offers']=[]
+# 評価リセット（新クラブで再スタート）
+game_state['manager_rating']=50; game_state['board_rating']=50
+new_t=find_team(new_club_name)
+if new_t and not new_t.get('sponsor'):
+new_t['sponsor']=_gen_sponsor(new_t['country'],div_of(new_club_name))
+check_achievement('career_move')
+add_news(f' {new_club_name}に転身！','club'); refresh_ui()
+# =========================================================
+# プレシーズン
+# =========================================================
+def run_preseason():
+sel=get_sel()
+if not sel: return
+results=[]
+for _ in range(3):
+opp=random.choice([t for d in game_state['divisions'] for t in game_state['divisions'
+ga,gb,*_=simulate_match_full(sel,opp)
+results.append(f'{sel["name"]} {ga}-{gb} {opp["name"]}')
+for p in sel['players']: p['stamina']=clamp(p['stamina']+random.randint(5,15),60,100)
+income=random.randint(50000,150000); sel['budget']+=income; add_sf('preseason',income)
+game_state['preseason_phase']=False; sel['preseason_done']=True
+add_news(f'プレシーズン完了！収入: {fmt_m(income)}','club')
+for r in results: add_news(f'親善試合: {r}','match')
+refresh_ui()
+# =========================================================
+# スポンサー
+# =========================================================
+def _gen_sponsor(country,div):
+bw={'D1':65000,'D2':42000,'D3':26000}[div]; bb={'D1':220000,'D2':150000,'D3':90000}[div]
+pool={'England':['NorthSea Media','Union Logistics','Royal Finance','Harbor Tech'],'Spain
+bm=1.0+(game_state.get('club_brand',50)-50)*0.005
+return {'name':random.choice(pool[country]),'weekly_income':int(bw*random.uniform(0.9,1.2
+def gen_sponsor_nego():
+sel=get_sel()
+if not sel: return
+offer=_gen_sponsor(sel['country'],div_of(sel['name'])); demand=random.choice(['若手起用','上
+game_state['pending_sponsor_negotiation']={'offer':offer,'demand':demand}
+add_news(f'スポンサー交渉: {offer["name"]}が「{demand}」を要求','club')
+def accept_sponsor():
+sel=get_sel(); data=game_state.get('pending_sponsor_negotiation')
+if not sel or not data: return
+o,dem=data['offer'],data['demand']
+if dem=='若手起用': o['weekly_income']=int(o['weekly_income']*0.95); o['season_bonus']=int
+elif dem=='上位進出': o['target_rank']=max(1,o['target_rank']-1); o['season_bonus']=int(o[
+elif dem=='堅実経営': o['weekly_income']=int(o['weekly_income']*1.05)
+elif dem=='観客動員増': o['win_bonus']=int(o['win_bonus']*1.15)
+sel['sponsor']=o; game_state['pending_sponsor_negotiation']=None
+add_news(f'スポンサー契約成立: {o["name"]}','club'); refresh_ui()
+def reject_sponsor():
+data=game_state.get('pending_sponsor_negotiation')
+if data: game_state['pending_sponsor_negotiation']=None; add_news(f'スポンサー交渉決裂: {dat
+# =========================================================
+# プレス・代表召集・エージェント
+# =========================================================
+def do_press(choice):
+effs={'強気発言':{'fan_happiness':3,'locker_room_mood':4,'manager_rating_risk':-3},'慎重姿勢
+eff=effs.get(choice,{})
+game_state['fan_happiness']=clamp(game_state['fan_happiness']+eff.get('fan_happiness',0),
+game_state['locker_room_mood']=clamp(game_state['locker_room_mood']+eff.get('locker_room_
+game_state['board_rating']=clamp(game_state['board_rating']+eff.get('board_rating',0),0,1
+sel=get_sel()
+if sel and eff.get('morale_all'):
+for p in sel['players']: p['morale']=clamp(p['morale']+eff['morale_all'],0,100)
+if eff.get('manager_rating_risk') and random.random()<0.3:
+game_state['manager_rating']=clamp(game_state['manager_rating']+eff['manager_rating_r
+game_state['pending_press']=False; add_news(f' プレス発言:「{choice}」','club'); refresh_u
+def process_intl_calls(team):
+if random.random()>0.15: return
+cands=[p for p in team['players'] if p['overall']>=68 and p.get('intl_weeks',0)<=0]
+if not cands: return
+p=random.choice(cands); weeks=random.randint(2,4); p['intl_weeks']=weeks
+p['intl_boost_pending']=True # 帰還後に成長ブースト
+add_news(f' {p["name"]}が代表召集（{weeks}週間）','player')
+def agent_intervention(team):
+if random.random()>0.12: return
+agents=[p for p in team['players'] if p.get('has_agent') and not p.get('transfer_request'
+if not agents: return
+p=random.choice(agents)
+add_news(f' {p["name"]}のエージェントが介入。移籍金+{p["agent_fee_pct"]}%要求','transfer')
+# =========================================================
+# 理事会・ネーミングライツ・買収
+# =========================================================
+def trigger_board_meeting():
+sel=get_sel()
+if not sel: return
+dn=div_of(sel['name']); tbl=sorted_table(dn)
+rank=next((i+1 for i,t in enumerate(tbl) if t['name']==sel['name']),10)
+mood='満足' if rank<=4 else('不満' if rank>=8 else '普通')
+add_news(f' 理事会ミーティング（現状:{mood} {rank}位）','club')
+events=[('追加補強資金',lambda: sel.update({'budget':sel['budget']+200000}) or add_news('理事
+evt=random.choice(events); add_news(f'理事会決定: {evt[0]}','club'); evt[1]()
+# 次回理事会は中盤頃（年2回）
+sel['board_meeting_week']=game_state['week']+18 if game_state['week']<18 else game_state[
+game_state['pending_board_meeting']=False
+def offer_naming_rights():
+sel=get_sel()
+if not sel or sel.get('naming_rights'): return
+companies=['TechCorp Arena','MegaBank Stadium','AutoGroup Park','AirlineOne Field','Digit
+upfront=random.randint(500000,1500000); weekly=random.randint(15000,40000)
+game_state['naming_rights_offer']={'company':random.choice(companies),'upfront':upfront,'
+add_news(f' ネーミングライツ打診 一時金{fmt_m(upfront)}/週{fmt_m(weekly)}','club')
+def accept_naming_rights():
+sel=get_sel(); offer=game_state.get('naming_rights_offer')
+if not sel or not offer: return
+sel['budget']+=offer['upfront']; sel['naming_rights']={'company':offer['company'],'weekly
+add_fin('ネーミングライツ',offer['upfront'],offer['company']); add_sf('naming_rights',offer
+game_state['fan_happiness']=clamp(game_state['fan_happiness']-3,0,100)
+game_state['club_brand']=clamp(game_state['club_brand']+4,0,100)
+game_state['naming_rights_offer']=None; add_news(f'ネーミングライツ契約成立','club'); refresh
+def reject_naming_rights():
+game_state['naming_rights_offer']=None; refresh_ui()
+def _check_buyout(team):
+if game_state.get('buyout_offer'): return
+if team['name']!=game_state['selected_club']: return
+if (game_state['club_brand']>=80 or game_state['financial_crisis']) and random.random()<0
+offer_type='富豪' if game_state['club_brand']>=80 else '再建型'
+boost=random.randint(2000000,5000000) if offer_type=='富豪' else random.randint(500000
+game_state['buyout_offer']={'type':offer_type,'budget_boost':boost,'board_control_los
+add_news(f' オーナー{offer_type}買収オファー！補強資金+{fmt_m(boost)}','club')
+def accept_buyout():
+offer=game_state.get('buyout_offer'); sel=get_sel()
+if not offer or not sel: return
+sel['budget']+=offer['budget_boost']; add_fin('買収資金',offer['budget_boost'],'オーナー変更
+if offer.get('board_control_loss'): game_state['board_rating']=clamp(game_state['board_ra
+game_state['club_brand']=clamp(game_state['club_brand']+8,0,100)
+game_state['buyout_offer']=None; add_news(f'オーナー{offer["type"]}買収受諾！','club'); refr
+def reject_buyout():
+game_state['buyout_offer']=None; refresh_ui()
+def set_budget_allocation(tp,fp,sp):
+sel=get_sel()
+if not sel: return
+total=sel['budget']
+sel['budget_transfer']=int(total*tp/100); sel['budget_facility']=int(total*fp/100); sel['
+add_news(f'予算配分: 移籍{tp}%/施設{fp}%/スタッフ{sp}%','club'); refresh_ui()
+# =========================================================
+# 移籍・レンタル・スカウト
+# =========================================================
+def renew_contract(pid):
+sel=get_sel()
+if not sel: return
+p=next((x for x in sel['players'] if x['id']==pid),None)
+if not p: ui.notify('選手なし'); return
+nw=int(p['wage']*random.uniform(1.10,1.25)); cost=nw*8
+if sel['budget']<cost: ui.notify('予算不足'); return
+sel['budget']-=cost; add_fin('契約更改',-cost,p['name']); add_sf('transfers_in',cost)
+p['wage']=nw; p['contract_years']=random.randint(2,5)
+p['unhappiness']=max(0,p['unhappiness']-20); p['transfer_request']=False
+add_news(f'{p["name"]}と契約延長 年俸{fmt_m(nw)}/{p["contract_years"]}年','club'); refresh_u
+def process_expiry():
+sel=get_sel()
+if not sel: return
+stay=[]; go=[]
+for p in sel['players']:
+p['contract_years']-=1
+if p['contract_years']<=0: go.append(p['name'])
+else: stay.append(p)
+if len(stay)>=11:
+sel['players']=stay
+for n in go: add_news(f'{n}が契約満了退団','transfer')
+else:
+for p in sel['players']:
+if p['contract_years']<=0: p['contract_years']=1
+add_news('契約満了選手を人数不足のため暫定残留','club')
+def gen_domestic_offers():
+sel=get_sel()
+if not sel: return
+offers=[]
+for p in sel['players']:
+if random.random()<0.12 and p['overall']>=60:
+buyer=random.choice([t for d in game_state['divisions'] for t in game_state['divi
+offers.append({'player_id':p['id'],'player_name':p['name'],'buyer':buyer['name'],
+game_state['transfer_offers']=offers
+def accept_transfer(pid,buyback=False):
+if not in_transfer_window(): ui.notify('移籍ウィンドウ外'); return
+sel=get_sel()
+if not sel: return
+o=next((x for x in game_state['transfer_offers'] if x['player_id']==pid),None)
+if not o: return
+if len(sel['players'])<=11: ui.notify('最低11人必要'); return
+p=next((x for x in sel['players'] if x['id']==pid),None)
+if not p: return
+fee=o.get('counter_fee') or o['fee']
+if p.get('has_agent'): agent_cut=int(fee*p['agent_fee_pct']/100); fee-=agent_cut; add_new
+sel['players']=[x for x in sel['players'] if x['id']!=pid]
+sel['budget']+=fee; add_fin('移籍売却',fee,p['name']); add_sf('transfers_out',fee)
+if buyback: p['buyback_fee']=int(fee*1.5); p['buyback_club']=sel['name']
+game_state['transfer_offers']=[x for x in game_state['transfer_offers'] if x['player_id']
+add_news(f'{p["name"]}を{o["buyer"]}に{fmt_m(fee)}で売却','transfer'); refresh_ui()
+def counter_offer(pid):
+o=next((x for x in game_state['transfer_offers'] if x['player_id']==pid),None)
+if not o: return
+o['counter_fee']=int(o['fee']*1.3)
+if random.random()<0.6: add_news(f'カウンター成立: {fmt_m(o["counter_fee"])}','transfer')
+else: game_state['transfer_offers']=[x for x in game_state['transfer_offers'] if x['playe
+refresh_ui()
+def reject_transfer(pid):
+game_state['transfer_offers']=[x for x in game_state['transfer_offers'] if x['player_id']
+def gen_foreign_offer():
+sel=get_sel()
+if not sel or not sel['players'] or random.random()>0.25: return
+p=random.choice(sel['players'])
+if p['overall']<65: return
+game_state['foreign_offers'].append({'player_id':p['id'],'club':random.choice(['Madrid FC
+add_news(f'海外クラブが{p["name"]}にオファー','transfer')
+def accept_foreign(pid):
+if not in_transfer_window(): ui.notify('移籍ウィンドウ外'); return
+sel=get_sel()
+if not sel: return
+o=next((x for x in game_state['foreign_offers'] if x['player_id']==pid),None)
+if not o: return
+if len(sel['players'])<=11: ui.notify('最低11人必要'); return
+p=next((x for x in sel['players'] if x['id']==pid),None)
+if not p: return
+sel['players']=[x for x in sel['players'] if x['id']!=pid]
+sel['budget']+=o['fee']; add_fin('海外移籍売却',o['fee'],p['name']); add_sf('transfers_out'
+game_state['foreign_offers']=[x for x in game_state['foreign_offers'] if x['player_id']!=
+game_state['club_brand']=clamp(game_state['club_brand']+3,0,100)
+add_news(f'{p["name"]}を海外{o["club"]}に{fmt_m(o["fee"])}で売却','transfer'); refresh_ui()
+def reject_foreign(pid):
+game_state['foreign_offers']=[x for x in game_state['foreign_offers'] if x['player_id']!=
+def gen_loan_offers():
+sel=get_sel()
+if not sel: return
+offers=[]
+for d in game_state['divisions']:
+for t in game_state['divisions'][d]:
+if t['name']==sel['name']: continue
+for p in t['players']:
+if p.get('loan_club') or random.random()>0.04 or p['overall']<58: continue
+offers.append({'player_id':p['id'],'player_name':p['name'],'player_pos':p['po
+random.shuffle(offers); game_state['loan_offers']=offers[:3]
+def accept_loan_in(pid):
+sel=get_sel()
+if not sel: return
+o=next((x for x in game_state['loan_offers'] if x['player_id']==pid),None)
+if not o: return
+if len(sel['players'])+len(sel.get('loan_in',[]))>=MAX_SQUAD: ui.notify('満員'); return
+if sel['budget']<o['loan_fee']: ui.notify('予算不足'); return
+src=find_team(o['from_club'])
+if not src: return
+p=next((x for x in src['players'] if x['id']==pid),None)
+if not p: return
+sel['budget']-=o['loan_fee']; add_fin('レンタル借用料',-o['loan_fee'],p['name'])
+p['loan_club']=sel['name']; p['loan_origin']=src['name']; p['loan_weeks']=o['weeks']
+src['players']=[x for x in src['players'] if x['id']!=pid]; sel.setdefault('loan_in',[]).
+game_state['loan_offers']=[x for x in game_state['loan_offers'] if x['player_id']!=pid]
+add_news(f'レンタル加入: {p["name"]}（{o["from_club"]}から{o["weeks"]}週間）','transfer'); re
+def reject_loan_in(pid):
+game_state['loan_offers']=[x for x in game_state['loan_offers'] if x['player_id']!=pid];
+def send_on_loan(pid):
+sel=get_sel()
+if not sel: return
+if len(sel['players'])<=11: ui.notify('最低11人必要'); return
+p=next((x for x in sel['players'] if x['id']==pid),None)
+if not p: return
+dests=[t for d in game_state['divisions'] for t in game_state['divisions'][d] if t['name'
+if not dests: ui.notify('受け入れ先なし'); return
+dest=random.choice(dests); weeks=random.choice([4,8,12]); inc=int(p['wage']*random.unifor
+sel['players']=[x for x in sel['players'] if x['id']!=pid]; sel['budget']+=inc; add_fin('
+p['loan_club']=dest['name']; p['loan_origin']=sel['name']; p['loan_weeks']=weeks
+dest.setdefault('loan_in',[]).append(p)
+add_news(f'レンタル放出: {p["name"]}→{dest["name"]}（{weeks}週間 収入{fmt_m(inc)}）','transfe
+def recall_loan(pid):
+sel=get_sel()
+if not sel: return
+for d in game_state['divisions']:
+for t in game_state['divisions'][d]:
+for p in t.get('loan_in',[]):
+if p['id']==pid and p.get('loan_origin')==sel['name']:
+if len(sel['players'])>=MAX_SQUAD: ui.notify('満員'); return
+t['loan_in']=[x for x in t['loan_in'] if x['id']!=pid]
+p['loan_club']=None; p['loan_origin']=None; p['loan_weeks']=0
+sel['players'].append(p); add_news(f'レンタル召還: {p["name"]}','transfer')
+def process_loan_returns():
+for d in game_state['divisions']:
+for t in game_state['divisions'][d]:
+ret=[]; stay=[]
+for p in t.get('loan_in',[]):
+p['loan_weeks']=max(0,p['loan_weeks']-1)
+if p['loan_weeks']<=0: ret.append(p)
+else: stay.append(p)
+t['loan_in']=stay
+for p in ret:
+orig=find_team(p.get('loan_origin',''))
+p['loan_club']=None; p['loan_origin']=None
+if orig and len(orig['players'])<MAX_SQUAD: orig['players'].append(p)
+def loaned_out():
+sel=get_sel()
+if not sel: return []
+return [(p,t['name']) for d in game_state['divisions'] for t in game_state['divisions'][d
+def settle_request(pid):
+sel=get_sel()
+if not sel: return
+p=next((x for x in sel['players'] if x['id']==pid),None)
+if not p: return
+cost=int(p['wage']*4)
+if sel['budget']<cost: ui.notify('予算不足'); return
+sel['budget']-=cost; p['unhappiness']=max(0,p['unhappiness']-40)
+p['transfer_request']=False; p['wage']=int(p['wage']*1.15)
+add_news(f'{p["name"]}と交渉成立、移籍要求撤回','transfer'); refresh_ui()
+def set_captain(pid):
+sel=get_sel()
+if not sel: return
+sel['captain_id']=pid
+p=next((x for x in sel['players'] if x['id']==pid),None)
+if p: add_news(f' {p["name"]}をキャプテンに任命','club')
+refresh_ui()
+def set_pk_taker(pid):
+sel=get_sel()
+if not sel: return
+sel['pk_taker_id']=pid
+p=next((x for x in sel['players'] if x['id']==pid),None)
+if p: add_news(f' {p["name"]}をPKシューターに指定','club')
+refresh_ui()
+def convert_position(pid,target_pos):
+"""ポジション変更/コンバート"""
+p=player_by_id(pid)
+if not p: return
+p['target_pos']=target_pos; p['convert_weeks']=6 # 6週間でコンバート完了
+add_news(f' {p["name"]}を{target_pos}にコンバート中（6週間）','player'); refresh_ui()
+def dispatch_overseas_scout(country):
+"""海外スカウト派遣"""
+sel=get_sel()
+if not sel: return
+cost=50000
+if sel['budget']<cost: ui.notify('予算不足'); return
+sel['budget']-=cost; add_fin('海外スカウト派遣',-cost,country)
+game_state['overseas_scout']={'country':country,'weeks_left':4}
+add_news(f' {country}に海外スカウトを派遣（4週間後に帰還）','player'); refresh_ui()
+def sign_overseas_player(pid):
+"""海外スカウト発掘選手の獲得"""
+sel=get_sel()
+if not sel: return
+p=next((x for x in game_state.get('overseas_pool',[]) if x['id']==pid),None)
+if not p: return
+if not in_transfer_window(): ui.notify('移籍ウィンドウ外'); return
+if sel['budget']<p['value']: ui.notify('予算不足'); return
+sel['budget']-=p['value']; add_fin('移籍加入',-p['value'],p['name']); add_sf('transfers_in
+p['club']=sel['name']; sel['players'].append(p)
+game_state['overseas_pool']=[x for x in game_state['overseas_pool'] if x['id']!=pid]
+add_news(f'海外選手獲得: {p["name"]}を{fmt_m(p["value"])}で','transfer'); refresh_ui()
+def create_scout_pool():
+sel=get_sel(); country=game_state['selected_country'] if not sel else sel['country']
+pool=[]
+for i in range(10):
+p=gen_player(country,'ScoutPool',900000+i)
+sb=game_state['facilities']['scouting']*2+(3 if has_skill('スカウト眼') else 0)
+sk=sum(s['skill']//10 for s in game_state['staff'] if s['type']=='スカウト')
+for k in p['attrs']: p['attrs'][k]=clamp(p['attrs'][k]+random.randint(0,sb+sk),30,99)
+_recompute(p)
+# スカウト不確実性: 実力の±10%の幅
+p['scout_ovr_min']=max(35,p['overall']-8); p['scout_ovr_max']=min(99,p['overall']+8)
+pool.append(p)
+game_state['scout_pool']=pool; refresh_ui()
+def sign_scout(pid):
+sel=get_sel()
+if not sel: return
+p=next((x for x in game_state.get('scout_pool',[]) if x['id']==pid),None)
+if not p: return
+if len(sel['players'])>=MAX_SQUAD: ui.notify('満員'); return
+if not in_transfer_window(): ui.notify('移籍ウィンドウ外'); return
+if sel['budget']<p['value']: ui.notify('予算不足'); return
+sel['budget']-=p['value']; add_fin('移籍加入',-p['value'],p['name']); add_sf('transfers_in
+p['club']=sel['name']; sel['players'].append(p)
+game_state['scout_pool']=[x for x in game_state['scout_pool'] if x['id']!=pid]
+add_news(f'{p["name"]}を{fmt_m(p["value"])}で獲得','transfer'); refresh_ui()
+def youth_text(p):
+diff=p['potential']-p['overall']
+if p['potential']>=80 and diff>=10: return 'かなり有望'
+elif p['potential']>=72: return '伸びしろ十分'
+elif p['potential']>=65: return '将来性あり'
+return '即戦力ではない'
+def youth_rec(p):
+if p['age']>=19: return '昇格/放出必須'
+if p['age']>=18 and p['overall']>=60: return '昇格推奨'
+if p['potential']-p['overall']>=12: return '育成推奨'
+return '様子見'
+def refresh_youth_queue():
+t=get_sel()
+if t: game_state['youth_decision_queue']=[p['id'] for p in t['youth'] if p['age']>=18]
+def promote_youth(pid):
+t=get_sel()
+if not t: return
+p=next((x for x in t['youth'] if x['id']==pid),None)
+if not p: return
+if len(t['players'])>=MAX_SQUAD: ui.notify('満員'); return
+t['youth']=[x for x in t['youth'] if x['id']!=pid]; p['club']=t['name']; p['contract_year
+t['players'].append(p)
+game_state['youth_decision_queue']=[x for x in game_state['youth_decision_queue'] if x!=p
+game_state['youth_promoted_count']=game_state.get('youth_promoted_count',0)+1
+if game_state['youth_promoted_count']>=5: check_achievement('youth_promoted')
+add_news(f'ユース昇格: {p["name"]}','player'); refresh_ui()
+def retain_youth(pid):
+t=get_sel()
+if not t: return
+p=next((x for x in t['youth'] if x['id']==pid),None)
+if not p or p['age']>=19: ui.notify('19歳以上は不可'); return
+p['contract_years']=max(p.get('contract_years',0),1)
+game_state['youth_decision_queue']=[x for x in game_state['youth_decision_queue'] if x!=p
+add_news(f'ユース残留: {p["name"]}','player'); refresh_ui()
+def release_youth(pid):
+t=get_sel()
+if not t: return
+p=next((x for x in t['youth'] if x['id']==pid),None)
+if not p: return
+t['youth']=[x for x in t['youth'] if x['id']!=pid]
+game_state['youth_decision_queue']=[x for x in game_state['youth_decision_queue'] if x!=p
+add_news(f'ユース放出: {p["name"]}','player'); refresh_ui()
+def refill_youth(team):
+target=random.randint(MIN_YOUTH,MAX_YOUTH)
+while len(team['youth'])<target:
+p=gen_player(team['country'],team['name'],random.randint(100000,999999),True)
+p['age']=16; p['contract_years']=random.randint(2,4); team['youth'].append(p)
+if p['is_wonderkid'] and team['name']==game_state.get('selected_club'):
+game_state['wonderkid_found']=game_state.get('wonderkid_found',0)+1
+if game_state['wonderkid_found']>=3: check_achievement('wonder_scout')
+add_news(f' 世界的逸材加入: {p["name"]}(POT {p["potential"]})','player')
+def poach_youth():
+sel=get_sel()
+if not sel or len(sel['youth'])>=MAX_YOUTH: ui.notify('枠満員'); return
+srcs=[t for d in game_state['divisions'] for t in game_state['divisions'][d] if t['name']
+if not srcs: return
+src=random.choice(srcs); cand=max(src['youth'],key=lambda p:p['potential'])
+fee=max(20000,int(cand['value']*0.35))
+if sel['budget']<fee: ui.notify('予算不足'); return
+sel['budget']-=fee; add_fin('ユース引き抜き',-fee,cand['name']); add_sf('transfers_in',fee)
+src['youth']=[x for x in src['youth'] if x['id']!=cand['id']]
+cand['club']=sel['name']; cand['contract_years']=random.randint(2,4); sel['youth'].append
+add_news(f'ユース引き抜き: {cand["name"]}（{src["name"]}から{fmt_m(fee)}）','transfer'); refr
+def set_youth_policy(pol):
+game_state['youth_policy']=pol; add_news(f'育成方針→{pol}','club'); refresh_ui()
+# =========================================================
+# 施設・スタッフ
+# =========================================================
+def upgrade_facility(ft):
+sel=get_sel()
+if not sel: return
+lv=game_state['facilities'][ft]
+if lv>=5: ui.notify('最大Lv'); return
+cost=150000*lv
+if sel['budget']<cost: ui.notify('資金不足'); return
+sel['budget']-=cost; game_state['facilities'][ft]+=1; add_fin('施設投資',-cost,ft); game_state['club_brand']=clamp(game_state['club_brand']+1,0,100)
+if all(v>=5 for v in game_state['facilities'].values()): check_achievement('max_facility'
+add_news(f'{ft}→Lv{game_state["facilities"][ft]}に強化','club'); refresh_ui()
+add_sf
+def upgrade_youth_fac():
+sel=get_sel()
+if not sel: return
+lv=game_state['facilities']['youth']
+if lv>=5: ui.notify('最大Lv'); return
+cost=200000*lv
+if sel['budget']<cost: ui.notify('資金不足'); return
+sel['budget']-=cost; game_state['facilities']['youth']+=1; add_fin('施設投資',-cost,'ユース
+add_news(f'ユース施設→Lv{game_state["facilities"]["youth"]}','club'); refresh_ui()
+def expand_stadium():
+sel=get_sel()
+if not sel: return
+inc=random.randint(3000,8000); cost=inc*35
+if sel['budget']<cost: ui.notify('資金不足'); return
+sel['budget']-=cost; sel['stadium_capacity']+=inc; add_fin('スタジアム拡張',-cost,'建設'); a
+game_state['club_brand']=clamp(game_state['club_brand']+2,0,100)
+add_news(f'スタジアム拡張+{inc}席','club'); refresh_ui()
+def upgrade_vip():
+sel=get_sel()
+if not sel: return
+lv=sel.get('vip_level',0)
+if lv>=3: ui.notify('VIP最大Lv3'); return
+cost=300000*(lv+1)
+if sel['budget']<cost: ui.notify('資金不足'); return
+sel['budget']-=cost; sel['vip_level']=lv+1; add_fin('VIP席投資',-cost,'建設'); add_sf('faci
+add_news(f'VIPエリアLv{sel["vip_level"]}に拡充','club'); refresh_ui()
+def hire_staff():
+sel=get_sel()
+if not sel or sel['budget']<60000: ui.notify('予算不足'); return
+s={'type':random.choice(STAFF_TYPES),'skill':random.randint(50,90),'salary':random.randin
+sel['budget']-=60000; game_state['staff'].append(s); add_fin('スタッフ雇用',-60000,s['type'
+add_news(f'スタッフ加入: {s["type"]}(skill {s["skill"]})','club'); refresh_ui()
+def set_tactic(tn):
+t=get_sel()
+if t: t['tactic']=tn; add_news(f'戦術→{tn}','club'); refresh_ui()
+def set_formation(fn):
+t=get_sel()
+if t: t['formation']=fn; add_news(f'フォーメーション→{fn}','club'); refresh_ui()
+def learn_skill(sk):
+if game_state.get('manager_skill_points',0)<=0: ui.notify('SPなし'); return
+if sk in game_state.get('manager_skills',[]): ui.notify('習得済み'); return
+game_state.setdefault('manager_skills',[]).append(sk); game_state['manager_skill_points']
+add_news(f' 監督スキル:「{sk}」習得','club'); refresh_ui()
+def set_training_focus(pid,focus):
+p=player_by_id(pid)
+if p: p['training_focus']=focus; add_news(f'{p["name"]}のトレーニング集中: {focus}','player'
+def set_role_wish(pid,role):
+p=player_by_id(pid)
+if p: p['role_wish']=role; add_news(f'{p["name"]}の希望役割: {role}','player'); refresh_ui
+# =========================================================
+# CPU管理
+# =========================================================
+def cpu_contracts(t):
+for p in list(t['players']):
+p['contract_years']-=1
+if p['contract_years']<=0:
+cost=int(p['wage']*8)
+if t['budget']>cost and random.random()<(0.75 if p['overall']>=65 else 0.45):
+t['budget']-=cost; p['wage']=int(p['wage']*random.uniform(1.05,1.20)); p['con
+else: t['players'].remove(p)
+while len(t['players'])<18:
+np=gen_player(t['country'],t['name'],random.randint(10000,99999))
+np['overall']=clamp(np['overall']+random.randint(-4,2),45,75); t['players'].append(np
+def cpu_transfers():
+for d in game_state['divisions']:
+for t in game_state['divisions'][d]:
+if t['name']==game_state['selected_club']: continue
+if random.random()<0.25 and t['budget']>200000:
+p=gen_player(t['country'],t['name'],random.randint(10000,99999))
+if p['overall']>60 and t['budget']>p['value']:
+t['budget']-=p['value']; t['players'].append(p)
+def run_cpu():
+for d in game_state['divisions']:
+for t in game_state['divisions'][d]:
+if t['name']==game_state['selected_club']: continue
+cpu_contracts(t); refill_youth(t)
+cpu_transfers()
+# =========================================================
+# 昇降格・表彰
+# =========================================================
+def do_promotion():
+d1=sorted_table('D1'); d2=sorted_table('D2'); d3=sorted_table('D3')
+rel1=d1[-2:]; prom2=d2[:2]; rel2=d2[-2:]; prom3=d3[:2]
+def mv(t,fr,to):
+game_state['divisions'][fr]=[x for x in game_state['divisions'][fr] if x['name']!=t['
+game_state['divisions'][to].append(t)
+for t in rel1:
+mv(t,'D1','D2'); add_news(f' 降格: {t["name"]} D1→D2','club')
+if t['name']==game_state['selected_club']: game_state['club_brand']=clamp(game_state[
+for t in prom2:
+if t not in rel1:
+mv(t,'D2','D1'); add_news(f' 昇格: {t["name"]} D2→D1','club')
+if t['name']==game_state['selected_club']:
+game_state['club_brand']=clamp(game_state['club_brand']+8,0,100); check_achie
+for t in rel2:
+if t not in prom2: mv(t,'D2','D3'); add_news(f' 降格: {t["name"]} D2→D3','club')
+for t in prom3:
+if t not in rel2: mv(t,'D3','D2'); add_news(f' 昇格: {t["name"]} D3→D2','club')
+country=game_state['selected_country']; used={t['name'] for d in game_state['divisions']
+for dn,(rmin,rmax) in [('D1',(62,78)),('D2',(54,70)),('D3',(46,64))]:
+while len(game_state['divisions'][dn])<10:
+nt=create_team(country,_rname(country,used),rmin,rmax); init_stats(); game_state[
+while len(game_state['divisions'][dn])>10: game_state['divisions'][dn].pop()
+def prize_money(dn,rank):
+if dn=='D1': t={1:900000,2:700000,3:550000,4:420000,5:320000,6:240000,7:180000,8:140000,9
+elif dn=='D2': t={1:500000,2:380000,3:280000,4:220000,5:170000,6:130000,7:100000,8:80000,
+else: t={1:300000,2:220000,3:170000,4:130000,5:100000,6:80000,7:60000,8:50000,9:40000,10:
+return t.get(rank,0)
+def calc_awards():
+pl=all_players()
+if not pl: return
+gb=max(pl,key=lambda p:p['stats']['goals']); mvp=max(pl,key=lambda p:p['stats']['goals']*
+game_state['season_awards']={'golden_boot':gb,'mvp':mvp}
+game_state['history_awards'].append({'season':game_state['season'],'golden_boot':gb['name
+add_news(f'年間MVP: {mvp["name"]}','club'); add_news(f'得点王: {gb["name"]}({gb["stats"]["g
+def update_hof():
+club=get_sel()
+if not club: return
+for p in club['players']:
+score=p['stats']['goals']*3+p['stats']['assists']*2+p['stats']['mom']*4
+e={'name':p['name'],'score':score,'reason':'シーズン表彰'}
+if score>120 and e not in game_state['club_hall_of_fame']:
+game_state['club_hall_of_fame'].append(e); add_news(f'殿堂入り: {p["name"]}','club
+def declare_goal(goal):
+sel=get_sel()
+if not sel: return
+sel['player_season_goal']=goal; game_state['season_goal_declared']=True
+bonus={'優勝を狙う':5,'上位進出':3,'残留で十分':2,'昇格を目指す':4}.get(goal,0)
+game_state['board_rating']=clamp(game_state['board_rating']+bonus,0,100)
+add_news(f' 今季目標:「{goal}」','club'); refresh_ui()
+def check_goal(dn,rank):
+sel=get_sel()
+if not sel or not sel.get('player_season_goal'): return
+goal=sel['player_season_goal']
+ok=(goal=='優勝を狙う' and rank==1) or (goal=='上位進出' and rank<=4) or (goal=='残留で十分' a
+if ok:
+sel['budget']+=100000; game_state['board_rating']=clamp(game_state['board_rating']+10
+game_state['club_brand']=clamp(game_state['club_brand']+5,0,100); add_news(f' else:
+目標「{
+game_state['board_rating']=clamp(game_state['board_rating']-5,0,100); add_news(f' 目
+sel['player_season_goal']=None; game_state['season_goal_declared']=False
+def reset_fin():
+game_state['season_finance']={k:0 for k in ['sponsor','matchday','transfers_in','transfer
+def start_domestic_cup():
+teams=[t for d in game_state['divisions'] for t in game_state['divisions'][d]]
+random.shuffle(teams)
+game_state['domestic_cup']={'teams':teams[:16],'round':1,'winner':None}
+add_news(' 国内カップ戦が開幕！16クラブ参加','cup')
+def play_cup_round():
+cup=game_state.get('domestic_cup')
+if not cup or cup.get('winner'): return
+winners=[]
+for i in range(0,len(cup['teams']),2):
+if i+1>=len(cup['teams']): winners.append(cup['teams'][i]); continue
+a,b=cup['teams'][i],cup['teams'][i+1]
+ga,gb,*_=simulate_match_full(a,b,cup=True); w=a if ga>gb else b; winners.append(w)
+sel=get_sel()
+if sel and sel['name'] in (a['name'],b['name']): add_news(f'カップ: {a["name"]} cup['teams']=winners; cup['round']+=1
+if len(cup['teams'])==1:
+champ=cup['teams'][0]; cup['winner']=champ['name']; champ['budget']+=500000
+add_news(f' 国内カップ優勝: {champ["name"]}','cup')
+if champ['name']==game_state['selected_club']:
+game_state['club_brand']=clamp(game_state['club_brand']+8,0,100); check_achieveme
+refresh_ui()
+{ga}-{
+def start_intl_cup():
+teams=[]
+for d in game_state['divisions']: tbl=sorted_table(d); teams+=tbl[:2]
+random.shuffle(teams); game_state['international_cup']={'teams':teams[:8],'round':1}
+def play_intl_round():
+cup=game_state.get('international_cup')
+if not cup or len(cup['teams'])<=1: return
+winners=[]
+for i in range(0,len(cup['teams']),2):
+if i+1>=len(cup['teams']): winners.append(cup['teams'][i]); continue
+a,b=cup['teams'][i],cup['teams'][i+1]; ga,gb,*_=simulate_match_full(a,b,cup=True)
+winners.append(a if ga>=gb else b)
+cup['teams']=winners; cup['round']+=1
+if len(cup['teams'])==1:
+champ=cup['teams'][0]; add_news(f'国際大会優勝: {champ["name"]}','cup')
+if champ['name']==game_state['selected_club']:
+game_state['club_brand']=clamp(game_state['club_brand']+10,0,100); check_achievem
+refresh_ui()
+# =========================================================
+# ユース大会
+# =========================================================
+def maybe_spawn_legacy_player(team):
+"""15シーズン以上経過したら引退済み殿堂選手の子供がユースに登場"""
+if game_state['season'] < 15: return
+hof=game_state.get('club_hall_of_fame',[])
+if not hof or random.random()>0.15: return
+parent=random.choice(hof)
+country=team.get('country','England')
+p=gen_player(country,team['name'],random.randint(800000,899999),True)
+# 親の名字を受け継ぐ
+parent_lastname=parent['name'].split()[-1] if ' ' in parent['name'] else parent['name']
+firstname=random.choice(COUNTRY_NAME_POOLS[country]['first'])
+p['name']=f'{firstname} {parent_lastname} Jr.'
+p['is_wonderkid']=True
+p['potential']=random.randint(82,94)
+for k in p['attrs']: p['attrs'][k]=clamp(p['attrs'][k]+random.randint(4,10),50,95)
+_recompute(p); p['age']=16; p['contract_years']=3
+team['youth'].append(p)
+add_news(f' 伝説の2世: {p["name"]}がアカデミーに加入（{parent["name"]}の子）POT{p["potential"
+def run_youth_cup(team):
+"""シーズン終了時にユース大会を開催。施設Lvに応じて成長ボーナス"""
+if not team.get('youth'): return
+fac_lv=game_state['facilities']['youth']
+# 参加チームはユースがいる全クラブ
+participants=[t for d in game_state['divisions'] for t in game_state['divisions'][d] if t
+if len(participants)<4: return
+# 簡易トーナメント（チーム総合力で決定）
+def youth_strength(t):
+return avg([p['overall'] for p in t['youth']]) if t['youth'] else 0
+ranked=sorted(participants,key=youth_strength,reverse=True)
+winner=ranked[0]
+# 優勝チームのユース選手に成長ボーナス
+bonus=fac_lv*random.randint(1,3)
+for p in winner['youth']:
+attr=random.choice(list(p['attrs'].keys()))
+p['attrs'][attr]=clamp(p['attrs'][attr]+bonus,30,99)
+_recompute(p)
+add_news(f' ユース大会優勝: {winner["name"]}（育成ボーナス+{bonus}）','cup')
+if winner['name']==game_state['selected_club']:
+game_state['locker_room_mood']=clamp(game_state['locker_room_mood']+5,0,100)
+add_news('自クラブのユースが大会を制覇！ロッカールームが盛り上がっている','club')
+# =========================================================
+# メインゲームループ
+# =========================================================
+def get_week_pairs(dn,week):
+teams=game_state['divisions'][dn]; names=[t['name'] for t in teams]
+rot=names[:]; seed=game_state['season']*1000+week+(1 if dn=='D2' else 2 if dn=='D3' else
+random.Random(seed).shuffle(rot)
+pairs=[(rot[i],rot[i+1]) for i in range(0,len(rot)-1,2) if i+1<len(rot)]
+if week%2==0: pairs=[(b,a) for a,b in pairs]
+return pairs
 def play_next_week():
-    if not game_state['selected_club']:
-        ui.notify('最初にクラブを選んでください')
-        return
-
-    if game_state['week'] > WEEKS_PER_SEASON:
-        season_rollover()
-        refresh_ui()
-        return
-
-    selected_team = get_selected_team()
-    logs = []
-    selected_won = False
-    game_state['last_match_result'] = ''
-    game_state['last_match_events'] = []
-
-    for div_key in ['1', '2', '3']:
-        division = game_state['divisions'][div_key]
-        week_matches = division['schedule'][game_state['week'] - 1]
-        for home_name, away_name in week_matches:
-            home = get_team(home_name)
-            away = get_team(away_name)
-            hg, ag = simulate_match(home, away, cup=False)
-
-            if selected_team['name'] == home_name and hg > ag:
-                selected_won = True
-            elif selected_team['name'] == away_name and ag > hg:
-                selected_won = True
-
-            if selected_team['name'] in (home_name, away_name):
-                result = f'{home_name} {hg} - {ag} {away_name}'
-                logs.append(result)
-                gate_income = random.randint(18000, 45000)
-                selected_team['budget'] += gate_income
-                selected_team['fans'] += random.randint(20, 120)
-                add_finance_log('試合収入', gate_income, 'リーグ戦')
-
-                game_state['last_match_result'] = result
-                game_state['last_match_events'] = build_match_events(home, away, hg, ag)
-
-    apply_weekly_finance(selected_team, won=selected_won)
-    recover_between_weeks()
-    generate_transfer_offers()
-
-    for line in reversed(logs):
-        game_state['news'].insert(0, f'第{game_state["week"]}節: {line}')
-
-    sponsor = selected_team.get('sponsor', {})
-    game_state['news'].insert(
-        0,
-        f'スポンサー収入 {sponsor.get("name", "スポンサー不明")}: '
-        f'${sponsor.get("weekly_income", 0):,}'
-        + (f' + 勝利ボーナス ${sponsor.get("win_bonus", 0):,}' if selected_won else '')
-    )
-
-    game_state['week'] += 1
-    refresh_ui()
-
-
-def play_next_cup_round():
-    cup = game_state['cup']
-    if not cup['active']:
-        ui.notify('カップ戦は終了しています')
-        return
-
-    next_winners = []
-    results = []
-    for home_name, away_name in cup['fixtures']:
-        home = get_team(home_name)
-        away = get_team(away_name)
-        hg, ag = simulate_match(home, away, cup=True)
-        winner = home if hg > ag else away
-        next_winners.append(winner['name'])
-        results.append(f'{home_name} {hg}-{ag} {away_name} | 勝者: {winner["name"]}')
-
-    cup['history'].append({'round': cup['round'], 'results': results})
-    for r in reversed(results):
-        game_state['news'].insert(0, f'カップ {cup["round"]}: {r}')
-
-    if len(next_winners) == 4:
-        cup['round'] = '準決勝'
-        cup['fixtures'] = [(next_winners[0], next_winners[1]), (next_winners[2], next_winners[3])]
-    elif len(next_winners) == 2:
-        cup['round'] = '決勝'
-        cup['fixtures'] = [(next_winners[0], next_winners[1])]
-    elif len(next_winners) == 1:
-        cup['round'] = '終了'
-        cup['winner'] = next_winners[0]
-        cup['fixtures'] = []
-        cup['active'] = False
-        game_state['news'].insert(0, f'カップ優勝: {cup["winner"]}')
-    refresh_ui()
-
-
-def refresh_scout_pool():
-    game_state['scout_pool'] = create_scout_pool(game_state['selected_country'], 10)
-    game_state['news'].insert(0, 'スカウト候補を更新しました。')
-    refresh_ui()
-
-
-def sign_scout_player(player_id):
-    selected = get_selected_team()
-    if not selected:
-        ui.notify('最初にクラブを選んでください')
-        return
-
-    player = next((p for p in game_state['scout_pool'] if p['id'] == player_id), None)
-    if not player:
-        ui.notify('選手が見つかりません')
-        return
-    if selected['budget'] < player['value']:
-        ui.notify('予算が足りません')
-        return
-    if len(selected['players']) >= MAX_SQUAD_SIZE:
-        ui.notify('トップチームの人数が上限です')
-        return
-
-    selected['budget'] -= player['value']
-    add_finance_log('移籍加入', -player['value'], player['name'])
-    player['club'] = selected['name']
-    selected['players'].append(player)
-    game_state['scout_pool'] = [p for p in game_state['scout_pool'] if p['id'] != player_id]
-    game_state['news'].insert(0, f'{player["name"]} を ${player["value"]:,} で獲得しました。')
-    refresh_ui()
-
-
-def promote_youth(player_id):
-    selected = get_selected_team()
-    if not selected:
-        return
-    if len(selected['players']) >= MAX_SQUAD_SIZE:
-        ui.notify('トップチームが満員です')
-        return
-    youth = next((p for p in selected['youth'] if p['id'] == player_id), None)
-    if not youth:
-        return
-    selected['youth'] = [p for p in selected['youth'] if p['id'] != player_id]
-    youth['club'] = selected['name']
-    selected['players'].append(youth)
-    game_state['news'].insert(0, f'ユース選手 {youth["name"]} を昇格させました。')
-    while len(selected['youth']) < 5:
-        selected['youth'].append(generate_player(selected['country'], selected['name'], random.randint(100, 999), youth=True))
-    refresh_ui()
-
-
-def release_youth(player_id):
-    selected = get_selected_team()
-    if not selected:
-        return
-    selected['youth'] = [p for p in selected['youth'] if p['id'] != player_id]
-    while len(selected['youth']) < 5:
-        selected['youth'].append(generate_player(selected['country'], selected['name'], random.randint(100, 999), youth=True))
-    game_state['news'].insert(0, 'ユース選手を放出しました。')
-    refresh_ui()
-
-
-def release_player(player_id):
-    selected = get_selected_team()
-    if not selected:
-        return
-    if len(selected['players']) <= 11:
-        ui.notify('最低11人は必要です')
-        return
-    target = get_player_by_id(player_id)
-    if not target or target['club'] != selected['name']:
-        return
-    selected['players'] = [p for p in selected['players'] if p['id'] != player_id]
-    game_state['news'].insert(0, f'{target["name"]} を放出しました。')
-    if game_state.get('selected_player_id') == player_id:
-        game_state['selected_player_id'] = ''
-    refresh_ui()
-
-
-def toggle_transfer_list(player_id):
-    p = get_player_by_id(player_id)
-    selected = get_selected_team()
-    if not p or not selected or p['club'] != selected['name']:
-        return
-    p['transfer_listed'] = not p.get('transfer_listed', False)
-    state = '移籍リストに掲載' if p['transfer_listed'] else '移籍リストから解除'
-    game_state['news'].insert(0, f'{p["name"]} を {state} しました。')
-    refresh_ui()
-
-
-def accept_transfer_offer(player_id):
-    selected = get_selected_team()
-    if not selected:
-        return
-    offer = next((o for o in game_state['transfer_offers'] if o['player_id'] == player_id), None)
-    if not offer:
-        return
-    if len(selected['players']) <= 11:
-        ui.notify('最低11人は必要です')
-        return
-    selected['players'] = [p for p in selected['players'] if p['id'] != player_id]
-    selected['budget'] += offer['fee']
-    add_finance_log('移籍売却', offer['fee'], offer['player_name'])
-    game_state['transfer_offers'] = [o for o in game_state['transfer_offers'] if o['player_id'] != player_id]
-    if game_state.get('selected_player_id') == player_id:
-        game_state['selected_player_id'] = ''
-    game_state['news'].insert(0, f'{offer["player_name"]} を {offer["buyer"]} に ${offer["fee"]:,} で売却しました。')
-    refresh_ui()
-
-
-def reject_transfer_offer(player_id):
-    game_state['transfer_offers'] = [o for o in game_state['transfer_offers'] if o['player_id'] != player_id]
-    game_state['news'].insert(0, 'オファーを拒否しました。')
-    refresh_ui()
-
-
-def select_player(player_id):
-    game_state['selected_player_id'] = player_id
-    nav_state['section'] = 'squad'
-    player = get_player_by_id(player_id)
-    refresh_ui()
-    if player:
-        ui.notify(f'{player["name"]} の詳細を表示中')
-
-
+sel=get_sel()
+if not sel: ui.notify('クラブを選択してください'); return
+if game_state.get('preseason_phase') and not sel.get('preseason_done'): nav_state['tab']=
+if game_state.get('manager_fired'): ui.notify('監督評価が危機的！','warning')
+# 複数週一括進行
+if game_state.get('bulk_advancing') and game_state.get('bulk_weeks_left',0)>0:
+game_state['bulk_weeks_left']-=1
+if game_state['bulk_weeks_left']<=0 or game_state.get('pending_event'):
+game_state['bulk_advancing']=False
+weather=roll_weather()
+if weather in ['雨','雪','強風']: add_news(f' 今節の天候: {weather}','match')
+game_state['halftime_data']=None; nav_state['halftime_mode']=False
+game_state['pending_press']=True
+won=drew=lost=False; results=[]
+for cd in ['D1','D2','D3']:
+for hn,an in get_week_pairs(cd,game_state['week']):
+ht=find_team(hn); at=find_team(an)
+ga1,gb1=simulate_half(ht,at,home_team=hn)
+if sel['name'] in (hn,an) and not game_state.get('halftime_data') and not game_st
+game_state['halftime_data']={'home':hn,'away':an,'ha_team':ht,'away_team':at,
+nav_state['halftime_mode']=True; continue
+ga,gb,att,rev,stats,extra=simulate_match_full(ht,at)
+results.append(f'{hn} {ga}-{gb} {an}')
+if sel['name'] in (hn,an):
+my=ga if sel['name']==hn else gb; op=gb if sel['name']==hn else ga
+game_state['last_match']={'result':results[-1],'attendance':att,'revenue':rev
+if my>op: won=True
+elif my==op: drew=True
+else: lost=True
+htd=game_state.get('halftime_data')
+if htd and not nav_state.get('halftime_mode'):
+ht=htd['ha_team']; at=htd['away_team']
+ga2,gb2=simulate_half(ht,at,home_team=htd['home'])
+ga=min(8,htd['ga1']+ga2); gb=min(8,htd['gb1']+gb2)
+update
+mom,sclog,cards=_match_stats_full(ht,at,ga,gb,WEATHER.get(weather,WEATHER['晴れ']))
+att=_attendance(ht,at,ht['name'] in at.get('rivals',[]))
+rev=_match_income(ht,att)
+result_text=f'{htd["home"]} {ga}-{gb} {htd["away"]}'; results.append(result_text)
+game_state['last_match']={'result':result_text,'attendance':att,'revenue':rev,'stats'
+my=ga if sel['name']==htd['home'] else gb; op=gb if sel['name']==htd['home'] else ga
+if my>op: won=True
+elif my==op: drew=True
+else: lost=True
+_update_table(ht,ga,gb); _update_table(at,gb,ga)
+_update_fanbase(ht,'win' if ga>gb else('draw' if ga==gb else 'loss'))
+_update_fanbase(at,'win' if gb>ga else('draw' if ga==gb else 'loss'))
+if ga>gb and ht['name']==game_state['selected_club']: _pay_win_bonus(ht)
+elif gb>ga and at['name']==game_state['selected_club']: _pay_win_bonus(at)
+game_state['halftime_data']=None
+weekly_sponsor(sel); weekly_expenses(sel); weekly_broadcast(sel); weekly_merch(sel); week
+process_loan_returns(); process_intl_calls(sel)
+update_player_feelings(sel,won,drew,lost); update_player_states(sel); update_chemistry(se
+update_fan_happiness(sel,won,drew,lost); update_manager_rating(sel,won,drew,lost); if game_state['manager_rating']>=45 and game_state['board_rating']>=40 and game_state.get
+game_state['manager_fired']=False; add_news('監督評価回復、続投決定','club')
+recover_players(); gen_domestic_offers(); gen_foreign_offer(); gen_loan_offers()
+agent_intervention(sel); apply_individual_training(sel); check_retirements(sel)
+gen_random_event(); gen_manager_offers()
+if won:
+game_state['win_streak']=game_state.get('win_streak',0)+1
+if game_state['win_streak']>=5: check_achievement('unbeaten_5')
+if sel.get('season_stats',{}).get('w',0)==1: check_achievement('first_win')
+else: game_state['win_streak']=0
+if sel['budget']>=5000000: check_achievement('rich_club')
+dn=div_of(sel['name']); tbl=sorted_table(dn)
+rank=next((i+1 for i,t in enumerate(tbl) if t['name']==sel['name']),10)
+game_state.setdefault('rank_history',[]).append({'week':game_state['week'],'rank':rank,'d
+sel.setdefault('rank_history',[]).append(rank)
+if game_state.get('last_match'):
+lm=game_state['last_match']
+add_news(f'観客{lm["attendance"]:,}人|収入{fmt_m(lm["revenue"])}','match')
+add_news(f'MOM: {lm["mom"]["name"]}','match')
+if lm.get('derby'): add_news(f'ダービー: {lm["result"]}','match')
+for r in reversed(results[-6:]): add_news(f'第{game_state["week"]}節: {r}','match')
+wk=game_state['week']
+if wk==CUP_START: start_domestic_cup()
+elif wk>CUP_START and (wk-CUP_START)%2==0:
+cup=game_state.get('domestic_cup')
+if cup and not cup.get('winner'): play_cup_round()
+if wk==sel.get('board_meeting_week',8): trigger_board_meeting()
+if random.random()<0.03 and not sel.get('naming_rights') and not game_state.get('naming_r
+if game_state.get('injury_insurance_active'):
+cost=8000; sel['budget']-=cost; add_sf('insurance',cost)
+game_state['week']+=1
+if game_state['week']>SEASON_WEEKS: season_end()
+elif nav_state.get('halftime_mode'): refresh_ui()
+elif game_state.get('bulk_advancing') and game_state.get('bulk_weeks_left',0)>0 and not g
+play_next_week()
+else: refresh_ui()
+def do_halftime(tactic_choice):
+htd=game_state.get('halftime_data')
+if not htd: return
+htd['ht_tac_a']=tactic_choice; nav_state['halftime_mode']=False
+add_news(f'ハーフタイム指示: 後半戦術→{tactic_choice}','match')
+# 後半を自動実行（再度「次の週へ」を押す必要をなくす）
+play_next_week()
+def bulk_advance(n):
+"""複数週一括進行"""
+game_state['bulk_advancing']=True; game_state['bulk_weeks_left']=n
+add_news(f' {n}週まとめて進行中...','club'); play_next_week()
+def season_end():
+sel=get_sel()
+if not sel: return
+calc_awards(); update_hof()
+dn=div_of(sel['name']); tbl=sorted_table(dn)
+rank=next((i+1 for i,t in enumerate(tbl) if t['name']==sel['name']),10)
+check_goal(dn,rank)
+pm=prize_money(dn,rank); sel['budget']+=pm; add_fin('リーグ賞金',pm,f'{dn} Rank {rank}'); a
+add_news(f'リーグ賞金{fmt_m(pm)}獲得','club')
+if dn=='D2' and rank<=2: sel['budget']+=350000; add_news('昇格ボーナス$350,000','club')
+if dn=='D3' and rank<=2: sel['budget']+=220000; add_news('昇格ボーナス$220,000','club')
+if rank==1: check_achievement('first_title')
+# クラブ歴史書に記録
+sel.setdefault('season_history',[]).append({'season':game_state['season'],'div':dn,'rank'
+game_state['club_history'].append({'season':game_state['season'],'club':sel['name'],'div'
+do_promotion(); process_expiry(); run_cpu()
+tr_b=game_state['facilities']['training']*0.3; ass_b=sum(s['skill']*0.003 for s in for d in game_state['divisions']:
+for t in game_state['divisions'][d]:
+t['season_stats']={'p':0,'w':0,'d':0,'l':0,'gf':0,'ga':0,'gd':0,'pts':0}
+for p in t['players']:
+p['age']+=1; gc=0.45+ass_b; dc=0.35
+if p.get('growth_type')=='早熟':
+if p['age']<=22: gc=0.60
+elif p['age']>=27: dc=0.50
+game_s
+if p.get('growth_type')=='晩成':
+if p['age']<=21: gc=0.30
+elif 24<=p['age']<=29: gc=0.55
+if p['age']<=23 and p['overall']<p['potential'] and random.random()<gc:
+for k in p['attrs']:
+if random.random()<0.4: p['attrs'][k]=clamp(p['attrs'][k]+random.rand
+elif p['age']>=30 and random.random()<dc:
+for k in p['attrs']:
+if random.random()<0.35: p['attrs'][k]=clamp(p['attrs'][k]-random.ran
+if p.get('injury_severity')=='重傷':
+for k in p['attrs']: p['attrs'][k]=clamp(p['attrs'][k]-random.randint(0,1
+_recompute(p); p['stamina']=100
+if p.get('injury_severity')!='重傷': p['injury_weeks']=0; p['injury_severity']
+p['state']='normal'; p['state_weeks']=0
+for p in t['youth']:
+p['age']+=1
+pol=YOUTH_POLICIES.get(game_state['youth_policy'],YOUTH_POLICIES['バランス'])
+for attr in p['attrs']:
+g=int(random.randint(0,2)*youth_b)
+if attr=='SPD': g=int(g*pol['SPD'])
+if attr in ['TEC','PAS']: g=int(g*pol['TEC'])
+if attr=='PHY': g=int(g*pol['PHY'])
+p['attrs'][attr]=clamp(p['attrs'][attr]+g,30,99)
+_recompute(p)
+refill_youth(t)
+run_youth_cup(get_sel()) if get_sel() else None
+if get_sel(): maybe_spawn_legacy_player(get_sel())
+refresh_youth_queue(); gen_sponsor_nego(); start_intl_cup(); game_state['domestic_cup']=N
+game_state['season']+=1; game_state['week']=1; game_state['season_goal_declared']=False
+game_state['preseason_phase']=True; sel['preseason_done']=False
+reset_fin(); add_news('シーズン終了。新シーズンへ','club')
+if game_state['season']>=3: check_achievement('season3')
+refresh_ui()
 def save_game():
-    with open(SAVE_FILE, 'w', encoding='utf-8') as f:
-        json.dump(game_state, f, ensure_ascii=False, indent=2)
-    ui.notify('save.json に保存しました')
-
-
-def load_game():
-    global game_state
-    if SAVE_FILE.exists():
-        with open(SAVE_FILE, 'r', encoding='utf-8') as f:
-            game_state = json.load(f)
-        refresh_ui()
-        ui.notify('save.json を読み込みました')
-    else:
-        ui.notify('save.json が見つかりません')
-
-
-def export_save():
-    save_game()
-    ui.download(str(SAVE_FILE))
-
-
-def import_save(e):
-    global game_state
-    try:
-        game_state = json.loads(e.content.read().decode('utf-8'))
-        refresh_ui()
-        ui.notify('セーブデータを読み込みました')
-    except Exception as ex:
-        ui.notify(f'読込失敗: {ex}')
-
-
-def set_team_tactic(tactic_name):
-    team = get_selected_team()
-    if team:
-        team['tactic'] = tactic_name
-        game_state['news'].insert(0, f'戦術を {tactic_name} に変更しました。')
-        refresh_ui()
-
-
-def set_country_temp(country_name):
-    game_state['selected_country'] = country_name
-    refresh_ui()
-
-
-def on_new_world(country_name):
-    global game_state
-    game_state = build_world(country_name)
-    nav_state['section'] = 'dashboard'
-    refresh_ui()
-    ui.notify(f'{country_name} で新規ワールドを作成しました')
-
-
-def select_club_direct(club_name):
-    game_state['selected_club'] = club_name
-    game_state['news'].insert(0, f'クラブを選択: {club_name}')
-    refresh_ui()
-
-
-def render_world_setup():
-    world_setup_container.clear()
-    with world_setup_container:
-        with ui.card().classes('w-full mobile-card'):
-            ui.label('ワールド設定').classes('section-title')
-            ui.label(f'現在の国: {game_state["selected_country"]}').classes('body-text')
-
-            with ui.element('div').classes('choice-grid'):
-                for country in COUNTRIES.keys():
-                    color = 'primary' if country == game_state['selected_country'] else 'secondary'
-                    ui.button(
-                        country,
-                        on_click=lambda _, c=country: set_country_temp(c)
-                    ).props(f'outline color={color}')
-
-            ui.button('新しい世界を作成', on_click=lambda: on_new_world(game_state['selected_country'])).classes('w-full mobile-btn')
-
-            if not game_state['selected_club']:
-                ui.label('最初のクラブを選んでください').classes('body-text')
-            else:
-                ui.label(f'選択中クラブ: {game_state["selected_club"]}').classes('body-text')
-                ui.label('クラブの選び直しはできません。変更したい場合は新しい世界を作成してください。').classes('muted-text')
-
-
-def render_club_picker():
-    club_picker_container.clear()
-    if game_state['selected_club']:
-        return
-    with club_picker_container:
-        ui.label('ディビジョン別クラブ選択').classes('section-title')
-        for div_key in ['1', '2', '3']:
-            division = game_state['divisions'][div_key]
-            with ui.card().classes('w-full mobile-card'):
-                ui.label(division['name']).classes('body-text')
-                for team in sort_table(division['teams']):
-                    label = f'{team["name"]} | 評判 {team["reputation"]} | 予算 ${team["budget"]:,}'
-                    ui.button(
-                        label,
-                        on_click=lambda _, name=team['name']: select_club_direct(name),
-                    ).props('outline color=primary').classes('w-full mobile-btn')
-
-
+try:
+data=json.dumps(game_state,ensure_ascii=False,default=str)
+ui.download(data.encode('utf-8'),'club_strive_v5_save.json'); add_news(' セーブ完了',
+except Exception as e: ui.notify(f'セーブ失敗: {e}')
+def load_game(content:bytes):
+global game_state
+try:
+game_state=json.loads(content.decode('utf-8')); init_stats(); add_news(' ロード完了',
+except Exception as e: ui.notify(f'ロード失敗: {e}')
+def new_world(country):
+global game_state
+game_state=build_world(country); init_stats()
+for d in game_state['divisions']:
+for t in game_state['divisions'][d]:
+t['sponsor']=_gen_sponsor(t['country'],d)
+nav_state['tab']='dashboard'; refresh_ui()
+def select_club(name):
+game_state['selected_club']=name; t=get_sel()
+if t and not t.get('sponsor'): t['sponsor']=_gen_sponsor(t['country'],div_of(t['name']))
+refresh_youth_queue(); add_news(f'クラブ選択: {name}','club'); refresh_ui()
+# =========================================================
+# UI
+# =========================================================
 def render_status():
-    status_container.clear()
-    with status_container:
-        selected = get_selected_team()
-        with ui.card().classes('w-full mobile-card status-card'):
-            ui.label(APP_NAME).classes('text-h5 strong-text')
-            ui.label(f'{game_state["selected_country"]} | シーズン {game_state["season"]} | 週 {min(game_state["week"], WEEKS_PER_SEASON)}').classes('muted-text')
-            ui.label(f'クラブ: {game_state["selected_club"] or "未選択"}').classes('body-text')
-            if selected:
-                ui.label(f'予算 ${selected["budget"]:,} | ファン {selected["fans"]:,} | Div {selected["division"]}').classes('muted-text')
-
-
+status_box.clear()
+with status_box:
+with ui.card().classes('w-full q-mb-sm'):
+ui.label(APP_TITLE).classes('text-h5')
+ui.label(f'S{game_state["season"]} W{game_state["week"]}/{SEASON_WEEKS}').classes
+weather=get_weather(); wc_col='text-blue' if weather in ['雨','雪'] else('text-ora
+ui.label(f'天候: {weather}').classes(f'text-body2 {wc_col}')
+if game_state.get('manager_fired'): ui.label(' 監督評価危機！').classes('text-red'
+if game_state.get('financial_crisis'): ui.label(' 財政危機！').classes('text-red'
+ui.label(' 移籍中' if in_transfer_window() else ' 移籍外').classes('text-caption
+ui.separator()
+t=get_sel()
+if t:
+dn=div_of(t['name']); tbl=sorted_table(dn) if dn else []
+rank=next((i+1 for i,x in enumerate(tbl) if x['name']==t['name']),'-')
+ui.label(f' {t["name"]}').classes('text-body1 text-bold')
+ui.label(f'{dn} {rank}位 | 評判{t["reputation"]}').classes('text-body2')
+ui.label(f'予算: {fmt_m(t["budget"])}').classes('text-body2'+(' text-red' if t
+ui.label(f'人気: {t["fan_base"]:,} | ブランド: {game_state["club_brand"]}').cla
+ui.label(f'ケミストリー: {t.get("chemistry",50)}/100').classes('text-body2')
+ui.label(f'監督exp: {game_state.get("manager_exp",0)} SP: {game_state.get("man
+loans=game_state.get('bank_loans',[])
+if loans: ui.label(f' ローン残: {len(loans)}件').classes('text-caption text-or
+else: ui.label('クラブ未選択').classes('text-body2')
 def render_dashboard():
-    selected = get_selected_team()
-    if not selected:
-        with ui.card().classes('w-full mobile-card'):
-            ui.label('最初にクラブを選択してください').classes('body-text')
-        return
-
-    ordered = sort_table(game_state['divisions'][str(selected['division'])]['teams'])
-    rank = next((i + 1 for i, t in enumerate(ordered) if t['name'] == selected['name']), '-')
-    wage_bill = sum(p['wage'] for p in selected['players'])
-    assessment = club_initial_assessment(selected)
-    sponsor = selected.get('sponsor', {})
-
-    with ui.card().classes('w-full mobile-card'):
-        ui.label(selected['name']).classes('section-title')
-        ui.label(f'Division {selected["division"]} | 順位 {rank}/{len(ordered)}').classes('body-text')
-        ui.label(f'戦術: {selected["tactic"]}').classes('body-text')
-        ui.label(f'チーム平均: {avg([p["overall"] for p in selected["players"]])}').classes('body-text')
-        ui.label(f'週給総額: ${wage_bill:,}').classes('body-text')
-        ui.label(f'初期評価: {assessment["level"]}').classes('body-text')
-        ui.label(f'平均能力 {assessment["avg_ovr"]} | 平均ポテンシャル {assessment["avg_pot"]} | 平均年齢 {assessment["avg_age"]}').classes('muted-text')
-        ui.label(f'スポンサー: {sponsor.get("name", "-")}').classes('body-text')
-        ui.label(
-            f'週次 ${sponsor.get("weekly_income", 0):,} | '
-            f'勝利ボーナス ${sponsor.get("win_bonus", 0):,} | '
-            f'目標順位 {sponsor.get("target_rank", "-")}'
-        ).classes('muted-text')
-
-    if game_state.get('sponsor_offer'):
-        offer = game_state['sponsor_offer']
-        with ui.card().classes('w-full mobile-card highlight-card'):
-            ui.label('スポンサー更新オファー').classes('section-title')
-            ui.label(f'{offer["name"]}').classes('body-text')
-            ui.label(
-                f'週次 ${offer["weekly_income"]:,} | 勝利ボーナス ${offer["win_bonus"]:,} | '
-                f'シーズン報酬 ${offer["season_bonus"]:,} | 目標順位 {offer["target_rank"]}'
-            ).classes('muted-text')
-            with ui.row().classes('w-full gap-2'):
-                ui.button('契約する', on_click=accept_sponsor_offer).props('color=positive').classes('w-full mobile-btn')
-                ui.button('見送る', on_click=reject_sponsor_offer).props('color=negative').classes('w-full mobile-btn')
-
-    with ui.card().classes('w-full mobile-card'):
-        ui.label('最新ニュース').classes('section-title')
-        for line in game_state['news'][:8]:
-            ui.label(f'• {line}').classes('body-text')
-
-    with ui.card().classes('w-full mobile-card'):
-        ui.label('財務履歴').classes('section-title')
-        if not game_state['finance_history']:
-            ui.label('まだ履歴はありません').classes('body-text')
-        else:
-            for item in game_state['finance_history'][:10]:
-                sign = '+' if item['amount'] >= 0 else ''
-                ui.label(
-                    f'S{item["season"]} W{item["week"]} | '
-                    f'{item["category"]} | {sign}${item["amount"]:,} | {item["note"]}'
-                ).classes('body-text')
-
-
+dashboard_box.clear()
+with dashboard_box:
+if not game_state['selected_club']:
+with ui.card().classes('w-full q-mb-sm'):
+ui.label('クラブを選択').classes('text-h6')
+for dn in ['D1','D2','D3']:
+ui.label(dn).classes('text-subtitle1 text-bold')
+for t in game_state['divisions'][dn]:
+ui.button(f'{t["name"]} | 評判{t["reputation"]} | {fmt_m(t["budget"])}
+return
+t=get_sel(); dn=div_of(t['name']); tbl=sorted_table(dn)
+rank=next((i+1 for i,x in enumerate(tbl) if x['name']==t['name']),10)
+# プレシーズン
+if game_state.get('preseason_phase') and not t.get('preseason_done'):
+with ui.card().classes('w-full q-mb-sm'):
+ui.label(' プレシーズン').classes('text-h6')
+ui.button('プレシーズンを実施する（親善試合3試合）',on_click=run_preseason).props('c
+# ハーフタイム
+if nav_state.get('halftime_mode') and game_state.get('halftime_data'):
+htd=game_state['halftime_data']
+with ui.card().classes('w-full q-mb-sm'):
+ui.label(f' ハーフタイム｜前半終了: {htd["home"]} {htd["ga1"]}-{htd["gb1"]} {ht
+ui.label('後半の戦術指示を選んでください').classes('text-body2')
+with ui.row():
+for tac in TACTICS: ui.button(tac,on_click=lambda e,tc=tac:do_halftime(tc
+ui.button('そのまま継続',on_click=lambda: do_halftime(t.get('tactic','バランス')
+# テキスト実況
+with ui.card().classes('w-full q-mb-sm'):
+ui.label(' テキスト実況（前半）').classes('text-h6')
+evts=game_state.get('live_commentary',[])
+for e in [x for x in evts if x['t']<=45][:12]:
+ui.label(f'{e["t"]}\' {e["txt"]}').classes('text-body2')
+return
+# ランダムイベント
+if game_state.get('pending_event'):
+evt=game_state['pending_event']
+with ui.card().classes('w-full q-mb-sm'):
+ui.label(f' イベント: {evt["text"]}').classes('text-h6')
+with ui.row():
+for ch in evt['choices']: ui.button(ch,on_click=lambda e,c=ch:resolve_eve
+# プレスカンファレンス
+if game_state.get('pending_press'):
+with ui.card().classes('w-full q-mb-sm'):
+ui.label(' 試合前プレスカンファレンス').classes('text-h6')
+with ui.row():
+for ch in ['強気発言','慎重姿勢','選手を称える','批判を受け入れる']:
+ui.button(ch,on_click=lambda e,c=ch:do_press(c)).props('color=primary
+# 目標宣言
+if not game_state.get('season_goal_declared') and not t.get('player_season_goal'):
+with ui.card().classes('w-full q-mb-sm'):
+ui.label(' 今季目標を宣言').classes('text-h6')
+with ui.row():
+for g in ['優勝を狙う','上位進出','残留で十分','昇格を目指す']:
+ui.button(g,on_click=lambda e,x=g:declare_goal(x)).props('color=prima
+# 監督キャリアオファー
+offers=game_state.get('manager_career_offers',[])
+if offers:
+with ui.card().classes('w-full q-mb-sm'):
+ui.label(' 監督オファー').classes('text-h6')
+for club_name in offers:
+ot=find_team(club_name)
+ui.label(f'{club_name} | 評判{ot["reputation"] if ot else "?"}').classes('
+ui.button(f'{club_name}に転身',on_click=lambda e,cn=club_name:accept_manag
+ui.button('全て断る',on_click=lambda: game_state.update({'manager_career_offer
+# ネーミングライツ
+if game_state.get('naming_rights_offer'):
+nr=game_state['naming_rights_offer']
+with ui.card().classes('w-full q-mb-sm'):
+ui.label(' ネーミングライツ打診').classes('text-h6')
+ui.label(f'{nr["company"]} | 一時金{fmt_m(nr["upfront"])} | 週次{fmt_m(nr["week
+with ui.row():
+ui.button('契約する',on_click=accept_naming_rights).props('color=positive'
+ui.button('断る',on_click=reject_naming_rights).props('color=negative')
+# 買収オファー
+if game_state.get('buyout_offer'):
+bo=game_state['buyout_offer']
+with ui.card().classes('w-full q-mb-sm'):
+ui.label(f' {bo["type"]}買収オファー').classes('text-h6')
+ui.label(f'+{fmt_m(bo["budget_boost"])}').classes('text-body2 text-positive')
+with ui.row():
+ui.button('受け入れる',on_click=accept_buyout).props('color=positive')
+ui.button('断る',on_click=reject_buyout).props('color=negative')
+# スポンサー交渉
+if game_state.get('pending_sponsor_negotiation'):
+data=game_state['pending_sponsor_negotiation']; o=data['offer']
+with ui.card().classes('w-full q-mb-sm'):
+ui.label('スポンサー交渉').classes('text-h6')
+ui.label(f'{o["name"]} | 週次{fmt_m(o["weekly_income"])} | 要求:{data["demand"
+with ui.row():
+ui.button('契約する',on_click=accept_sponsor).props('color=positive')
+ui.button('断る',on_click=reject_sponsor).props('color=negative')
+# メインダッシュボード
+with ui.card().classes('w-full q-mb-sm'):
+ui.label(f'{t["name"]}').classes('text-h6')
+ui.label(f'{dn} {rank}位 | 評判{t["reputation"]} | ケミストリー{t.get("chemistry",50
+if t.get('player_season_goal'): ui.label(f'今季目標: {t["player_season_goal"]}').c
+if t.get('naming_rights'): ui.label(f' {t["naming_rights"]["company"]}').classe
+if t.get('sponsor'): ui.label(f'スポンサー: {t["sponsor"]["name"]} 週{fmt_m(t["spon
+with ui.row():
+for lbl,val in [('監督',game_state['manager_rating']),('理事会',game_state['boa
+with ui.column().classes('items-center'):
+ui.circular_progress(value=val,max=100,size='55px')
+ui.label(lbl).classes('text-caption')
+# 直近試合
+if game_state.get('last_match'):
+lm=game_state['last_match']
+with ui.card().classes('w-full q-mb-sm'):
+ui.label('直近試合').classes('text-h6')
+ui.label(lm['result']).classes('text-body1 text-bold')
+ui.label(f'観客{lm["attendance"]:,}人 | {fmt_m(lm["revenue"])} | MOM:{lm["mom"
+if lm.get('weather'): ui.label(f'天候: {lm["weather"]}').classes('text-caption
+for h in lm.get('highlights',[]): ui.label(f' {h}').classes('text-caption')
+# テキスト実況（後半分）
+evts=game_state.get('live_commentary',[])
+if evts:
+ui.label('試合ハイライト実況:').classes('text-subtitle2')
+for e in [x for x in evts if x.get('t',0)>45][:8]:
+ui.label(f'{e["t"]}\' {e["txt"]}').classes('text-caption')
+# ダービー通算
+if t.get('derby_record'):
+with ui.card().classes('w-full q-mb-sm'):
+ui.label(' ダービー').classes('text-h6')
+for rv,rec in t['derby_record'].items():
+ui.label(f'{rv}: {rec["w"]}勝{rec["d"]}分{rec["l"]}敗').classes('text-body
+# 実績
+done=game_state.get('achievements',[])
+if done:
+with ui.card().classes('w-full q-mb-sm'):
+ui.label(' 実績').classes('text-h6')
+with ui.row():
+for key in done:
+a=ACHIEVEMENTS.get(key,{})
+ui.chip(f'{a.get("icon","")}{a.get("name",key)}').classes('text-body2
+# 監督キャリア歴
+career=game_state.get('manager_career',[])
+if career:
+with ui.card().classes('w-full q-mb-sm'):
+ui.label(' 監督キャリア').classes('text-h6')
+for c in career: ui.label(f'S{c["season"]}: {c["club"]} {c["div"]} {c["rank"]
+# クラブ歴史書
+history=get_sel().get('season_history',[]) if get_sel() else []
+if len(history)>=2:
+with ui.card().classes('w-full q-mb-sm'):
+ui.label(' クラブ歴史書').classes('text-h6')
+for h in history[-5:]: ui.label(f'S{h["season"]}: {h["div"]} {h["rank"]}位 {h
+# 順位推移
+rh=game_state.get('rank_history',[])
+if rh:
+with ui.card().classes('w-full q-mb-sm'):
+ui.label(' 順位推移').classes('text-h6')
+ui.label('直近10週: '+' → '.join(str(x['rank']) for x in rh[-10:])).classes('t
+# 移籍要求
+req=[p for p in t['players'] if p.get('transfer_request')]
+if req:
+with ui.card().classes('w-full q-mb-sm'):
+ui.label(' 移籍要求').classes('text-h6 text-red')
+for p in req:
+ui.label(f'{p["name"]} OVR{p["overall"]} 不満{p["unhappiness"]}').classes
+ui.button('交渉',on_click=lambda e,pid=p['id']:settle_request(pid)).props
+# トレーニング結果
+tr=game_state.get('training_results',[])
+if tr:
+with ui.card().classes('w-full q-mb-sm'):
+ui.label(' トレーニング結果').classes('text-h6')
+for r in tr: ui.label(f' {r}').classes('text-body2 text-positive')
+# ニュース
+with ui.card().classes('w-full q-mb-sm'):
+ui.label(' ニュース').classes('text-h6')
+cats=['全て','match','transfer','player','club','cup','injury']
+def set_f(c): game_state['news_filter']=c; refresh_ui()
+with ui.row():
+for c in cats:
+active=game_state.get('news_filter','全て')==c
+ui.button(c,on_click=lambda e,x=c:set_f(x)).props(f'{"color=primary" if a
+flt=game_state.get('news_filter','全て')
+for n in [x for x in game_state['news'] if flt=='全て' or x.get('cat')==flt][:20]:
+ui.label(f'・{n["text"]}').classes('text-body2')
 def render_squad():
-    selected = get_selected_team()
-    if not selected:
-        with ui.card().classes('w-full mobile-card'):
-            ui.label('最初にクラブを選択してください').classes('body-text')
-        return
-
-    with ui.card().classes('w-full mobile-card'):
-        ui.label('戦術設定').classes('section-title')
-        ui.select(
-            options=list(TACTICS.keys()),
-            value=selected['tactic'],
-            on_change=lambda e: set_team_tactic(e.value),
-        ).classes('w-full')
-
-    for p in sorted(selected['players'], key=lambda x: (x['pos'], -x['overall'])):
-        with ui.card().classes('w-full mobile-card'):
-            status = f' | 負傷 {p["injury"]}週' if p['injury'] > 0 else ''
-            listed = ' | 移籍リスト' if p.get('transfer_listed') else ''
-            ui.label(f'{p["name"]} | {p["pos"]} | OVR {p["overall"]}{listed}{status}').classes('body-text')
-            ui.label(f'年齢 {p["age"]} | 体力 {p["stamina"]} | 士気 {p["morale"]} | 価値 ${p["value"]:,}').classes('muted-text')
-            with ui.row().classes('w-full gap-2'):
-                ui.button('詳細', on_click=lambda _, pid=p['id']: select_player(pid)).props('dense')
-                ui.button('リスト' if not p.get('transfer_listed') else '解除',
-                          on_click=lambda _, pid=p['id']: toggle_transfer_list(pid)).props('dense')
-                ui.button('放出', on_click=lambda _, pid=p['id']: release_player(pid)).props('dense color=negative')
-
-    selected_player = get_player_by_id(game_state.get('selected_player_id'))
-    if selected_player:
-        with ui.card().classes('w-full mobile-card highlight-card'):
-            ui.label('選手詳細').classes('section-title')
-            ui.label(f'{selected_player["name"]} | {selected_player["pos"]}').classes('text-h6 strong-text')
-            ui.label(f'年齢 {selected_player["age"]} | 国籍 {selected_player["nationality"]}').classes('body-text')
-            ui.label(f'総合 {selected_player["overall"]} | ポテンシャル {selected_player["potential"]}').classes('body-text')
-            ui.label(f'価値 ${selected_player["value"]:,} | 週給 ${selected_player["wage"]:,}').classes('body-text')
-            ui.label(' / '.join(f'{k}:{v}' for k, v in selected_player['attrs'].items())).classes('muted-text')
-
-
-def render_match():
-    selected = get_selected_team()
-    if not selected:
-        with ui.card().classes('w-full mobile-card'):
-            ui.label('最初にクラブを選択してください').classes('body-text')
-        return
-
-    with ui.card().classes('w-full mobile-card'):
-        ui.label('リーグ進行').classes('section-title')
-        ui.label(f'現在の週: {min(game_state["week"], WEEKS_PER_SEASON)} / {WEEKS_PER_SEASON}').classes('body-text')
-        ui.button('次の週へ進む', on_click=play_next_week).classes('w-full mobile-btn')
-
-    div = game_state['divisions'][str(selected['division'])]
-    week_index = min(game_state['week'] - 1, len(div['schedule']) - 1)
-    with ui.card().classes('w-full mobile-card'):
-        ui.label('今週のカード').classes('section-title')
-        if 0 <= week_index < len(div['schedule']):
-            for home, away in div['schedule'][week_index]:
-                ui.label(f'{home} vs {away}').classes('body-text')
-
-    if game_state['last_match_result']:
-        with ui.card().classes('w-full mobile-card highlight-card'):
-            ui.label('直近試合').classes('section-title')
-            ui.label(game_state['last_match_result']).classes('body-text')
-            for e in game_state['last_match_events']:
-                ui.label(f'• {e}').classes('muted-text')
-
-
-def render_standings():
-    for div_key in ['1', '2', '3']:
-        division = game_state['divisions'][div_key]
-        with ui.card().classes('w-full mobile-card'):
-            ui.label(division['name']).classes('section-title')
-            ordered = sort_table(division['teams'])
-            for idx, t in enumerate(ordered, start=1):
-                mark = '⭐ ' if t['name'] == game_state['selected_club'] else ''
-                ui.label(
-                    f'{idx}. {mark}{t["name"]} | 試合 {t["table"]["p"]} 勝 {t["table"]["w"]} 分 {t["table"]["d"]} '
-                    f'敗 {t["table"]["l"]} | 得失点差 {t["table"]["gd"]} | 勝点 {t["table"]["pts"]}'
-                ).classes('body-text')
-
-
-def render_youth():
-    selected = get_selected_team()
-    if not selected:
-        with ui.card().classes('w-full mobile-card'):
-            ui.label('最初にクラブを選択してください').classes('body-text')
-        return
-
-    with ui.card().classes('w-full mobile-card'):
-        ui.label('ユース').classes('section-title')
-        ui.label(f'ユース人数: {len(selected["youth"])} / {MAX_YOUTH_SIZE}').classes('body-text')
-        ui.label('昇格でトップチームへ送れます').classes('muted-text')
-
-    for p in sorted(selected['youth'], key=lambda x: (-x['potential'], -x['overall'])):
-        with ui.card().classes('w-full mobile-card'):
-            ui.label(f'{p["name"]} | {p["pos"]} | OVR {p["overall"]} | POT {p["potential"]}').classes('body-text')
-            ui.label(f'年齢 {p["age"]} | {p["nationality"]}').classes('muted-text')
-            ui.label(' / '.join(f'{k}:{v}' for k, v in p['attrs'].items())).classes('muted-text')
-            with ui.row().classes('w-full gap-2'):
-                ui.button('詳細', on_click=lambda _, pid=p['id']: select_player(pid)).props('dense')
-                ui.button('昇格', on_click=lambda _, pid=p['id']: promote_youth(pid)).props('dense color=positive')
-                ui.button('放出', on_click=lambda _, pid=p['id']: release_youth(pid)).props('dense color=negative')
-
-
-def render_cup():
-    cup = game_state['cup']
-    with ui.card().classes('w-full mobile-card'):
-        ui.label('国内カップ').classes('section-title')
-        if cup['active']:
-            ui.label(f'ラウンド: {cup["round"]}').classes('body-text')
-            for home, away in cup['fixtures']:
-                ui.label(f'{home} vs {away}').classes('body-text')
-            ui.button('カップ戦を進める', on_click=play_next_cup_round).classes('w-full mobile-btn')
-        else:
-            ui.label(f'優勝: {cup["winner"]}').classes('body-text')
-
-    if cup['history']:
-        with ui.card().classes('w-full mobile-card'):
-            ui.label('カップ結果履歴').classes('section-title')
-            for block in reversed(cup['history']):
-                ui.label(block['round']).classes('body-text')
-                for r in block['results']:
-                    ui.label(f'• {r}').classes('muted-text')
-
-
-def render_scout():
-    selected = get_selected_team()
-    if not selected:
-        with ui.card().classes('w-full mobile-card'):
-            ui.label('最初にクラブを選択してください').classes('body-text')
-        return
-
-    with ui.card().classes('w-full mobile-card'):
-        ui.label('スカウト市場').classes('section-title')
-        ui.label(f'予算: ${selected["budget"]:,}').classes('body-text')
-        ui.button('候補更新', on_click=refresh_scout_pool).classes('w-full mobile-btn')
-
-    for p in sorted(game_state['scout_pool'], key=lambda x: (-x['overall'], x['age'])):
-        with ui.card().classes('w-full mobile-card'):
-            ui.label(f'{p["name"]} | {p["pos"]} | OVR {p["overall"]} | POT {p["potential"]}').classes('body-text')
-            ui.label(f'年齢 {p["age"]} | {p["nationality"]} | 価値 ${p["value"]:,}').classes('muted-text')
-            with ui.row().classes('w-full gap-2'):
-                ui.button('詳細', on_click=lambda _, pid=p['id']: select_player(pid)).props('dense')
-                ui.button('獲得', on_click=lambda _, pid=p['id']: sign_scout_player(pid)).props('dense color=positive')
-
-
-def render_transfer():
-    selected = get_selected_team()
-    if not selected:
-        with ui.card().classes('w-full mobile-card'):
-            ui.label('最初にクラブを選択してください').classes('body-text')
-        return
-
-    with ui.card().classes('w-full mobile-card'):
-        ui.label('移籍リスト').classes('section-title')
-        listed = [p for p in selected['players'] if p.get('transfer_listed')]
-        if not listed:
-            ui.label('掲載中の選手はいません').classes('body-text')
-        else:
-            for p in listed:
-                ui.label(f'{p["name"]} | {p["pos"]} | OVR {p["overall"]} | 価値 ${p["value"]:,}').classes('body-text')
-
-    with ui.card().classes('w-full mobile-card'):
-        ui.label('オファー一覧').classes('section-title')
-        if not game_state['transfer_offers']:
-            ui.label('今週のオファーはありません').classes('body-text')
-        else:
-            for o in game_state['transfer_offers']:
-                ui.label(f'{o["player_name"]} ← {o["buyer"]} | ${o["fee"]:,}').classes('body-text')
-                with ui.row().classes('w-full gap-2'):
-                    ui.button('承諾', on_click=lambda _, pid=o['player_id']: accept_transfer_offer(pid)).props('dense color=positive')
-                    ui.button('拒否', on_click=lambda _, pid=o['player_id']: reject_transfer_offer(pid)).props('dense color=negative')
-
-
-def render_save():
-    with ui.card().classes('w-full mobile-card'):
-        ui.label('セーブ管理').classes('section-title')
-        ui.button('保存', on_click=save_game).classes('w-full mobile-btn')
-        ui.button('読込', on_click=load_game).classes('w-full mobile-btn')
-        ui.button('JSON書き出し', on_click=export_save).classes('w-full mobile-btn')
-        ui.upload(on_upload=import_save, label='JSON読み込み').classes('w-full')
-
-
-def render_content():
-    content_container.clear()
-    with content_container:
-        section = nav_state['section']
-        if section == 'dashboard':
-            render_dashboard()
-        elif section == 'squad':
-            render_squad()
-        elif section == 'match':
-            render_match()
-        elif section == 'standings':
-            render_standings()
-        elif section == 'youth':
-            render_youth()
-        elif section == 'cup':
-            render_cup()
-        elif section == 'scout':
-            render_scout()
-        elif section == 'transfer':
-            render_transfer()
-        elif section == 'save':
-            render_save()
-
-
-def refresh_ui():
-    render_world_setup()
-    render_club_picker()
-    render_status()
-    render_content()
-
-
-game_state = build_world('England')
-
+dashboard_box.clear()
+with dashboard_box:
+t=get_sel()
+if not t: ui.label('クラブ未選択'); return
+# スターティングイレブン
+with ui.card().classes('w-full q-mb-sm'):
+ui.label(' スターティングイレブン').classes('text-h6')
+xi_ids=set(t.get('starting_xi',[]))
+ui.label(f'選択中: {len(xi_ids)}/11人 {" 確定" if len(xi_ids)==11 else ""}').class
+avail=[p for p in t['players'] if p['injury_weeks']<=0 and p.get('intl_weeks',0)<
+for p in sorted(avail,key=lambda x:(-x['overall'],x['pos'])):
+inxi=p['id'] in xi_ids
+def toggle(e,pid=p['id'],cur=inxi):
+xi=set(t.get('starting_xi',[]));
+if cur: xi.discard(pid)
+elif len(xi)<11: xi.add(pid)
+t['starting_xi']=list(xi); refresh_ui()
+inj=' ' if p['injury_weeks']>0 else ''
+ui.button(f'{"✓" if inxi else "○"} {p["name"]} {p["pos"]} OVR{p["overall"]} {
+with ui.row():
+ui.button('確定',on_click=lambda: set_starting_xi(t.get('starting_xi',[]))).pr
+ui.button('自動選出',on_click=auto_lineup).props('color=secondary')
+# PKシューター・セットプレー担当設定
+with ui.card().classes('w-full q-mb-sm'):
+ui.label(' PKシューター / セットプレー担当指定').classes('text-h6')
+pk_id=t.get('pk_taker_id')
+ck_id=t.get('ck_taker_id')
+fk_id=t.get('fk_taker_id')
+pk_p=next((p for p in t['players'] if p['id']==pk_id),None)
+ck_p=next((p for p in t['players'] if p['id']==ck_id),None)
+fk_p=next((p for p in t['players'] if p['id']==fk_id),None)
+if pk_p: ui.label(f'PKシューター: {pk_p["name"]} (SHT:{pk_p["attrs"].get("SHT",50)}
+if ck_p: ui.label(f'CK担当: {ck_p["name"]} (TEC:{ck_p["attrs"].get("TEC",50)})').c
+if fk_p: ui.label(f'FK担当: {fk_p["name"]} (SHT:{fk_p["attrs"].get("SHT",50)})').c
+ui.label('PKシューター指定（SHT順）:').classes('text-subtitle2')
+top_shooters=sorted(t['players'],key=lambda p:p['attrs'].get('SHT',50),reverse=Tr
+with ui.row():
+for p in top_shooters:
+ui.button(f'{p["name"]} SHT{p["attrs"].get("SHT",50)}',on_click=lambda e,
+ui.label('CK担当指定（TEC順）:').classes('text-subtitle2')
+top_tec=sorted(t['players'],key=lambda p:p['attrs'].get('TEC',50),reverse=True)[:
+with ui.row():
+for p in top_tec:
+ui.button(f'{p["name"]} TEC{p["attrs"].get("TEC",50)}',on_click=lambda e,
+ui.label('FK担当指定（SHT順）:').classes('text-subtitle2')
+with ui.row():
+for p in top_shooters:
+ui.button(f'{p["name"]} SHT{p["attrs"].get("SHT",50)}',on_click=lambda e,
+# 戦術
+with ui.card().classes('w-full q-mb-sm'):
+ui.label(' 戦術').classes('text-h6')
+with ui.row():
+for tn in TACTICS: ui.button(tn,on_click=lambda e,x=tn:set_tactic(x)).props(f
+ui.label('フォーメーション:').classes('text-subtitle2')
+with ui.row():
+for fn in FORMATIONS: ui.button(fn,on_click=lambda e,x=fn:set_formation(x)).p
+# 監督スキル
+with ui.card().classes('w-full q-mb-sm'):
+ui.label(f' 監督スキル (exp:{game_state.get("manager_exp",0)} SP:{game_state.get("
+with ui.row():
+for sk,data in MANAGER_SKILLS.items():
+learned=sk in game_state.get('manager_skills',[])
+req_ok=game_state.get('manager_exp',0)>=data['req_exp']
+col='positive' if learned else('primary' if req_ok else 'grey')
+ui.button(f'{" " if learned else ""}{sk} {data["desc"]}',on_click=lambda
+# トップチーム
+with ui.card().classes('w-full q-mb-sm'):
+ui.label(f'トップチーム ({len(t["players"])}名)').classes('text-h6')
+for p in sorted(t['players'],key=lambda x:(x['pos'],-x['overall'])):
+inj=f' {p["injury_severity"]}({p["injury_weeks"]}週)' if p['injury_weeks']>0 els
+intl=f' ({p.get("intl_weeks",0)}週)' if p.get('intl_weeks',0)>0 else ''
+req=' ' if p.get('transfer_request') else ''
+cap=' ' if p['id']==t.get('captain_id') else ''
+xi_mark='✓' if p['id'] in set(t.get('starting_xi',[])) else ''
+retire=' ' if p.get('retiring') else ''
+state=PLAYER_STATES.get(p.get('state','normal'),PLAYER_STATES['normal'])['label']
+agent=' ' if p.get('has_agent') else ''
+local=' ' if p.get('is_local') else ''
+convert=f'→{p.get("target_pos","")}({p.get("convert_weeks",0)}週)' if p.get('co
+with ui.card().classes('w-full q-mb-xs'):
+ui.label(f'{xi_mark}{cap}{p["name"]} | {p["pos"]} OVR{p["overall"]} | {state}
+ui.label(f'{p["age"]}歳 | 年俸{fmt_m(p["wage"])} | 契約{p["contract_years"]}年
+ui.label(f'出場{p["stats"]["apps"]} G{p["stats"]["goals"]} A{p["stats"]["assis
+attr_str=' '.join(f'{ATTR_ICONS.get(k,k)}{v}' for k,v in p['attrs'].items())
+ui.label(attr_str).classes('text-caption')
+with ui.row():
+ui.button('延長',on_click=lambda e,pid=p['id']:renew_contract(pid)).props
+ui.button('詳細',on_click=lambda e,pid=p['id']:show_player(pid))
+ui.button(' C',on_click=lambda e,pid=p['id']:set_captain(pid)).props('fl
+ui.button(' 放出',on_click=lambda e,pid=p['id']:send_on_loan(pid)).props
+# トレーニング・役割設定
+focus=p.get('training_focus','')
+with ui.row():
+ui.label('集中:').classes('text-caption')
+for attr in list(p['attrs'].keys())[:4]:
+ui.button(f'{ATTR_ICONS.get(attr,attr)}',on_click=lambda e,pid=p['id'
+ui.button('役割:'+p.get('role_wish','どちらでも'),on_click=lambda e,pid=p['
+# コンバート
+with ui.row():
+ui.label('コンバート→').classes('text-caption')
+for pos in [pp for pp in POSITIONS if pp!=p['pos']]:
+ui.button(pos,on_click=lambda e,pid=p['id'],tp=pos:convert_position(p
+# レンタル等
+lo=loaned_out()
+if lo:
+with ui.card().classes('w-full q-mb-sm'):
+ui.label(' レンタル放出中').classes('text-h6')
+for p,dest in lo:
+ui.label(f'{p["name"]}→{dest} 残{p["loan_weeks"]}週').classes('text-body2'
+ui.button('召還',on_click=lambda e,pid=p['id']:recall_loan(pid)).props('co
+if t.get('loan_in'):
+with ui.card().classes('w-full q-mb-sm'):
+ui.label(' レンタル借用中').classes('text-h6')
+for p in t['loan_in']:
+ui.label(f'{p["name"]}({p.get("loan_origin","?")}) {p["pos"]} OVR{p["over
+qps=[player_by_id(pid) for pid in game_state.get('youth_decision_queue',[]) if # ユース
+if qps:
+player
+with ui.card().classes('w-full q-mb-sm'):
+ui.label('18歳到達ユース').classes('text-h6')
+for p in qps:
+ui.label(f'{p["name"]} {p["age"]}歳 {p["pos"]} OVR{p["overall"]} POT{p["p
+with ui.row():
+ui.button('昇格',on_click=lambda e,pid=p['id']:promote_youth(pid)).pro
+ui.button('残留',on_click=lambda e,pid=p['id']:retain_youth(pid)).prop
+ui.button('放出',on_click=lambda e,pid=p['id']:release_youth(pid)).pro
+with ui.card().classes('w-full q-mb-sm'):
+ui.label('ユースアカデミー').classes('text-h6')
+with ui.row():
+for pol in YOUTH_POLICIES: ui.button(pol,on_click=lambda e,p=pol:set_youth_po
+qset=set(game_state.get('youth_decision_queue',[]))
+for p in sorted([x for x in t['youth'] if x['id'] not in qset],key=lambda x:(-x['
+tag=' ' if p.get('is_wonderkid') else ''
+ui.label(f'{tag}{p["name"]} {p["age"]}歳 {p["pos"]} OVR{p["overall"]} POT{p["p
+def render_matches():
+dashboard_box.clear()
+with dashboard_box:
+t=get_sel()
+if not t: ui.label('クラブ未選択'); return
+dn=div_of(t['name'])
+with ui.card().classes('w-full q-mb-sm'):
+ui.label('試合進行').classes('text-h6')
+ui.label(f'{dn} | 第{game_state["week"]}節/{SEASON_WEEKS}節 | 天候:{get_weather()}'
+if game_state.get('preseason_phase') and not t.get('preseason_done'):
+ui.button('プレシーズン実施',on_click=run_preseason).props('color=warning')
+else:
+with ui.row():
+ui.button('次の週へ進む',on_click=play_next_week).props('color=primary')
+ui.button('5週一括進行',on_click=lambda: bulk_advance(5)).props('color=seco
+ui.button('10週一括進行',on_click=lambda: bulk_advance(10)).props('flat')
+cup=game_state.get('domestic_cup')
+if cup and not cup.get('winner'):
+in_cup=any(x['name']==t['name'] for x in cup['teams'])
+ui.label(f' 国内カップ R{cup["round"]} / {"出場中" if in_cup else "敗退済み"}').
+with ui.card().classes('w-full q-mb-sm'):
+ui.label(f'第{game_state["week"]}節カード').classes('text-h6')
+for hn,an in get_week_pairs(dn,game_state['week']):
+ht2=find_team(hn); at2=find_team(an)
+derby=' ' if at2 and hn in at2.get('rivals',[]) else ''
+ui.label(f'{derby}{hn} vs {an}').classes('text-red' if derby else 'text-body2
+for dname in ['D1','D2','D3']:
+with ui.card().classes('w-full q-mb-sm'):
+ui.label(f'順位表 [{dname}]').classes('text-h6')
+for i,tm in enumerate(sorted_table(dname),1):
+s=tm['season_stats']; mark=' ' if tm['name']==t['name'] else ''
+ui.label(f'{i}. {mark}{tm["name"]} | 勝点{s["pts"]} | {s["w"]}-{s["d"]}-{s
+def render_transfers():
+dashboard_box.clear()
+with dashboard_box:
+t=get_sel()
+if not t: ui.label('クラブ未選択'); return
+if not in_transfer_window():
+with ui.card().classes('w-full q-mb-sm'):
+ui.label(' 移籍ウィンドウ外').classes('text-h6')
+ui.label('完全移籍は夏(週1-6)と冬(週19-22)のみ可能。現在はレンタルのみ。').classes('te
+with ui.card().classes('w-full q-mb-sm'):
+ui.label(' 国内スカウト市場').classes('text-h6')
+with ui.row():
+ui.button('候補更新',on_click=create_scout_pool)
+ui.button('ユース引き抜き',on_click=poach_youth).props('color=warning')
+if 'scout_pool' not in game_state: create_scout_pool()
+for p in game_state['scout_pool']:
+# スカウト不確実性: 推定値を表示
+est=f'推定OVR {p.get("scout_ovr_min",p["overall"])}～{p.get("scout_ovr_max",p[
+grade=p.get('scout_grade','C')
+ui.label(f'{p["name"]} {p["pos"]} {est} (評価:{grade}) {fmt_m(p["value"])} {"
+ui.button('獲得',on_click=lambda e,pid=p['id']:sign_scout(pid)).props('color=p
+# 海外スカウト
+with ui.card().classes('w-full q-mb-sm'):
+ui.label(' 海外スカウト派遣').classes('text-h6')
+os_data=game_state.get('overseas_scout')
+if os_data: ui.label(f'{os_data["country"]}に派遣中（残{os_data["weeks_left"]}週）')
+else:
+with ui.row():
+for country in COUNTRIES:
+ui.button(country,on_click=lambda e,c=country:dispatch_overseas_scout
+ui.label('費用: $50,000 / 4週後に帰還').classes('text-caption')
+# 海外スカウット候補
+op=game_state.get('overseas_pool',[])
+if op:
+ui.label('海外スカウット候補:').classes('text-subtitle2')
+for p in op:
+est=f'推定OVR {p.get("scout_ovr_min",p["overall"])}～{p.get("scout_ovr_max
+ui.label(f'{p["name"]} {p["nationality"]} {p["pos"]} {est} {fmt_m(p["valu
+ui.button('獲得',on_click=lambda e,pid=p['id']:sign_overseas_player(pid)).
+# 国内オファー
+with ui.card().classes('w-full q-mb-sm'):
+ui.label(' 国内移籍オファー').classes('text-h6')
+if not game_state['transfer_offers']: ui.label('なし').classes('text-body2')
+else:
+for o in game_state['transfer_offers']:
+p2=player_by_id(o['player_id'])
+agent_note=f' 手数料{p2["agent_fee_pct"]}%' if p2 and p2.get('has_agent')
+ui.label(f'{o["player_name"]} ← {o["buyer"]} / {fmt_m(o.get("counter_fee"
+with ui.row():
+ui.button('承諾',on_click=lambda e,pid=o['player_id']:accept_transfer
+ui.button('カウンター×1.3',on_click=lambda e,pid=o['player_id']:counter
+ui.button('買戻条項付き',on_click=lambda e,pid=o['player_id']:accept_tr
+ui.button('拒否',on_click=lambda e,pid=o['player_id']:reject_transfer
+# 海外オファー
+with ui.card().classes('w-full q-mb-sm'):
+ui.label(' 海外オファー').classes('text-h6')
+if not game_state['foreign_offers']: ui.label('なし').classes('text-body2')
+else:
+for o in game_state['foreign_offers']:
+p2=player_by_id(o['player_id'])
+if p2:
+ui.label(f'{p2["name"]} ← {o["club"]} / {fmt_m(o["fee"])}').classes('
+with ui.row():
+ui.button('承諾',on_click=lambda e,pid=o['player_id']:accept_forei
+ui.button('拒否',on_click=lambda e,pid=o['player_id']:reject_forei
+# レンタル
+with ui.card().classes('w-full q-mb-sm'):
+ui.label(' レンタル借用オファー').classes('text-h6')
+if not game_state.get('loan_offers'): ui.label('なし').classes('text-body2')
+else:
+for o in game_state['loan_offers']:
+ui.label(f'{o["player_name"]}({o["from_club"]}) {o["player_pos"]} OVR{o["
+with ui.row():
+ui.button('借りる',on_click=lambda e,pid=o['player_id']:accept_loan_in
+ui.button('断る',on_click=lambda e,pid=o['player_id']:reject_loan_in(p
+with ui.card().classes('w-full q-mb-sm'):
+ui.label(' レンタル放出').classes('text-h6')
+for p in sorted([x for x in t['players'] if not x.get('loan_club')],key=lambda x:
+ui.label(f'{p["name"]} {p["pos"]} OVR{p["overall"]}').classes('text-body2')
+ui.button('放出',on_click=lambda e,pid=p['id']:send_on_loan(pid)).props('flat
+# 選手比較
+if game_state.get('scout_pool') and t['players']:
+with ui.card().classes('w-full q-mb-sm'):
+ui.label(' 選手比較').classes('text-h6')
+best=max(t['players'],key=lambda p:p['overall']); cand=game_state['scout_pool
+with ui.row():
+with ui.column():
+ui.label(f'自: {best["name"]} OVR{best["overall"]}').classes('text-sub
+for k,v in best['attrs'].items(): ui.label(f'{ATTR_ICONS.get(k,k)}{k}
+with ui.column():
+ui.label(f'候補: {cand["name"]} OVR{cand["overall"]}').classes('text-s
+for k,v in cand['attrs'].items():
+diff=v-best['attrs'].get(k,0); col='text-positive' if diff>0 else
+ui.label(f'{ATTR_ICONS.get(k,k)}{k}: {v} ({"+"+str(diff) if diff>
+def render_management():
+dashboard_box.clear()
+with dashboard_box:
+t=get_sel()
+if not t: ui.label('クラブ未選択'); return
+with ui.card().classes('w-full q-mb-sm'):
+ui.label(' 施設管理').classes('text-h6')
+fac_names={'youth':'ユース','training':'トレーニング','medical':'メディカル','scouting
+for ft in FACILITY_TYPES:
+lv=game_state['facilities'][ft]; nm=fac_names[ft]
+ui.label(f'{nm}: Lv{lv}/5 (強化費:{fmt_m(150000*lv)})').classes('text-body2')
+if ft=='stadium': ui.button('スタジアム拡張',on_click=expand_stadium).classes('q
+elif ft=='youth': ui.button('ユース強化',on_click=upgrade_youth_fac).classes('q
+else: ui.button(f'{nm}強化',on_click=lambda e,x=ft:upgrade_facility(x)).classe
+vip=t.get('vip_level',0)
+ui.label(f'VIPエリア: Lv{vip}/3').classes('text-body2')
+if vip<3: ui.button(f'VIP拡充({fmt_m(300000*(vip+1))})',on_click=upgrade_vip).clas
+with ui.card().classes('w-full q-mb-sm'):
+ui.label(' スタッフ').classes('text-h6')
+ui.button('スタッフ雇用 ($60,000)',on_click=hire_staff).props('color=primary')
+effs={'ヘッドコーチ':'強度+','スカウト':'スカウット質+','フィジオ':'怪我率-','アシスタント'
+for s in game_state['staff']:
+ui.label(f'{s["type"]} {effs.get(s["type"],"")} skill{s["skill"]} 給与{fmt_m(s
+# 財務
+with ui.card().classes('w-full q-mb-sm'):
+ui.label(' 財務サマリー').classes('text-h6')
+f=game_state['season_finance']
+items=[('スポンサー','sponsor'),('観客','matchday'),('放映権','broadcast'),('グッズ/肖
+for lbl,k in items:
+v=f.get(k,0); col='text-positive' if v>0 else('text-negative' if v<0 else '')
+ui.label(f'{lbl}: {fmt_m(v)}').classes(f'text-body2 {col}')
+dn=div_of(t['name']); cap=SALARY_CAP.get(dn,999999)
+total_wage=sum(p['wage'] for p in t['players'])
+ui.label(f'総給与: {fmt_m(total_wage)} / 上限: {fmt_m(cap)}').classes('text-body2'+
+# 銀行ローン・保険
+with ui.card().classes('w-full q-mb-sm'):
+ui.label(' 銀行ローン').classes('text-h6')
+loans=game_state.get('bank_loans',[])
+if loans:
+for l in loans: ui.label(f'残{l["remaining_weeks"]}週 金利{int(l["interest_rat
+else: ui.label('ローンなし').classes('text-body2')
+with ui.row():
+for amt in [200000,500000,1000000]:
+ui.button(f'{fmt_m(amt)}借りる',on_click=lambda e,a=amt:take_bank_loan(a))
+with ui.card().classes('w-full q-mb-sm'):
+ui.label(' 選手保険').classes('text-h6')
+ins=game_state.get('injury_insurance_active',False)
+ui.label(f'状態: {"契約中（週{fmt_m(8000)}）" if ins else "未契約"}').classes('text-b
+if not ins: ui.button('保険契約（週$8,000）',on_click=activate_insurance).props('co
+# 予算配分
+with ui.card().classes('w-full q-mb-sm'):
+ui.label(' 予算配分').classes('text-h6')
+ui.label(f'移籍:{fmt_m(t.get("budget_transfer",0))} 施設:{fmt_m(t.get("budget_faci
+with ui.row():
+ui.button('攻撃的(移籍60%)',on_click=lambda: set_budget_allocation(60,25,15)).p
+ui.button('バランス(各33%)',on_click=lambda: set_budget_allocation(33,34,33)).p
+ui.button('育成重視(施設50%)',on_click=lambda: set_budget_allocation(25,50,25))
+# 国際大会
+with ui.card().classes('w-full q-mb-sm'):
+ui.label(' 国際大会').classes('text-h6')
+cup=game_state.get('international_cup')
+if not cup: ui.label('未開催').classes('text-body2')
+else:
+ui.label(f'R{cup["round"]} 残{len(cup["teams"])}クラブ').classes('text-body2')
+ui.button('国際大会を進める',on_click=play_intl_round)
+for tm in cup['teams']:
+mark=' ' if tm['name']==t['name'] else ''
+ui.label(f'{mark}{tm["name"]}').classes('text-body2')
+# セーブ
+with ui.card().classes('w-full q-mb-sm'):
+ui.label(' セーブ/ロード').classes('text-h6')
+ui.button('セーブ',on_click=save_game).props('color=primary')
+ui.upload(label='JSONロード',on_upload=lambda e:load_game(e.content.read()),auto_u
+def show_player(pid):
+p=player_by_id(pid)
+if not p: return
+with ui.dialog() as dlg, ui.card():
+ui.label(f'{p["name"]}').classes('text-h6')
+ui.label(f'{p["club"]} / {p["nationality"]} {" 地元" if p.get("is_local") else ""}')
+ui.label(f'{p["age"]}歳 | {p["pos"]} | OVR{p["overall"]} | POT{p["potential"]}').clas
+ui.label(f'スタイル:{p["playstyle"]} | 性格:{p["personality"]} | 特性:{p.get("trait","な
+ui.label(f'成長:{p.get("growth_type","標準")} | 状態:{PLAYER_STATES.get(p.get("state","
+ui.label(f'契約{p["contract_years"]}年 | 年俸{fmt_m(p["wage"])} | 不満{p["unhappiness"]
+sev=p.get('injury_severity','なし')
+ui.label(f'負傷:{sev}({p["injury_weeks"]}週)').classes('text-body2'+(' text-red' if se
+if p.get('intl_weeks',0)>0: ui.label(f'代表召集中 {p["intl_weeks"]}週 {"→帰還後成長あり"
+if p.get('has_agent'): ui.label(f'エージェントあり（手数料{p["agent_fee_pct"]}%）').classe
+if p.get('retiring'): ui.label(' 今季引退予定').classes('text-red')
+if p.get('convert_weeks',0)>0: ui.label(f' コンバート中→{p.get("target_pos","")} ({p["
+ui.label(f'役割希望: {p.get("role_wish","どちらでも")}').classes('text-body2')
+with ui.row():
+for k,v in p['attrs'].items():
+with ui.column().classes('items-center'):
+ui.circular_progress(value=v,max=99,size='48px')
+ui.label(f'{ATTR_ICONS.get(k,k)}{k}').classes('text-caption')
+st=p['stats']
+ui.label(f'出場{st["apps"]} G{st["goals"]} A{st["assists"]} MOM{st["mom"]} CS{st.get("
+if p.get('buyback_fee'): ui.label(f'買戻し:{fmt_m(p["buyback_fee"])}').classes('text-b
+ui.button('閉じる',on_click=dlg.close)
+dlg.open()
+def render_current_tab():
+{'dashboard':render_dashboard,'squad':render_squad,'matches':render_matches,'transfers':r
+def refresh_ui(): render_status(); render_current_tab()
+def switch_tab(tab): nav_state['tab']=tab; refresh_ui()
+# =========================================================
+# 初期化・起動
+# =========================================================
+game_state=build_world('England'); init_stats()
+for d in game_state['divisions']:
+for t in game_state['divisions'][d]:
+t['sponsor']=_gen_sponsor(t['country'],d)
 ui.add_head_html('''
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <style>
-    body {
-        background: #081225;
-        color: #f8fafc;
-    }
-    .nicegui-content {
-        max-width: 860px;
-        margin: 0 auto;
-        padding: 74px 12px 92px 12px;
-        box-sizing: border-box;
-    }
-    .mobile-card {
-        border-radius: 16px;
-        margin-bottom: 12px;
-        background: #16243a !important;
-        color: #f8fafc !important;
-        border: 1px solid rgba(148, 163, 184, 0.18);
-        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.22);
-    }
-    .mobile-btn {
-        min-height: 46px;
-        font-weight: 700;
-        border-radius: 12px;
-    }
-    .footer-nav {
-        padding-bottom: env(safe-area-inset-bottom);
-        background: rgba(8, 18, 37, 0.98);
-        backdrop-filter: blur(10px);
-        border-top: 1px solid rgba(148, 163, 184, 0.18);
-    }
-    .strong-text {
-        color: #ffffff !important;
-        font-weight: 700;
-    }
-    .body-text {
-        color: #f8fafc !important;
-        line-height: 1.45;
-    }
-    .muted-text {
-        color: #dbe7f5 !important;
-        line-height: 1.4;
-    }
-    .section-title {
-        color: #ffffff !important;
-        font-size: 1.08rem;
-        font-weight: 800;
-    }
-    .status-card {
-        background: #1b2b44 !important;
-    }
-    .highlight-card {
-        border: 1px solid rgba(96, 165, 250, 0.55);
-        background: #1d304d !important;
-    }
-    .choice-grid {
-        display: grid;
-        grid-template-columns: 1fr 1fr;
-        gap: 8px;
-        width: 100%;
-    }
-    .choice-grid button {
-        min-height: 44px;
-        border-radius: 12px;
-        font-weight: 700;
-    }
+body{background:#0f172a;color:#e5e7eb}
+.q-card{background:#111827;color:#e5e7eb;border-radius:14px}
+.q-header,.q-footer{background:#1e293b!important}
 </style>
 ''')
-
-with ui.header(fixed=True).classes('items-center justify-between bg-slate-900 text-white'):
-    ui.label(APP_NAME).classes('text-h6')
-    ui.label('モバイル版').classes('text-caption')
-
-world_setup_container = ui.column().classes('w-full')
-club_picker_container = ui.column().classes('w-full')
-status_container = ui.column().classes('w-full')
-content_container = ui.column().classes('w-full')
-
-country_select = ui.input(value=game_state['selected_country']).style('display:none')
-
-with ui.footer(fixed=True).classes('footer-nav'):
-    with ui.row().classes('w-full no-wrap justify-around items-center gap-1'):
-        for key, label in [
-            ('dashboard', '家'),
-            ('squad', '団'),
-            ('match', '試'),
-            ('standings', '順'),
-            ('youth', '育'),
-            ('cup', '杯'),
-            ('scout', '探'),
-            ('transfer', '移'),
-            ('save', '保'),
-        ]:
-            ui.button(
-                label,
-                on_click=lambda _, k=key: (nav_state.__setitem__('section', k), render_content()),
-            ).props('flat dense').classes('text-sm text-white')
-
+with ui.header().classes('items-center justify-between'):
+ui.label(APP_TITLE).classes('text-h5')
+with ui.row():
+for c in COUNTRIES:
+ui.button(c,on_click=lambda e,cc=c:new_world(cc)).props('flat color=white')
+with ui.row().classes('w-full'):
+status_box=ui.column().classes('w-1/4')
+dashboard_box=ui.column().classes('w-3/4')
+with ui.footer().classes('justify-around'):
+for lbl,tab in [('ダッシュボード','dashboard'),('チーム','squad'),('試合','matches'),('移籍','
+ui.button(lbl,on_click=lambda e,t=tab:switch_tab(t)).props('flat color=white')
 refresh_ui()
-
-ui.run(host='0.0.0.0', port=PORT)
+ui.run(title=APP_TITLE)
