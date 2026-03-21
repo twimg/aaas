@@ -198,7 +198,7 @@ def check_achievement(key):
 done=game_state.setdefault(‘achievements’,[])
 if key not in done and key in ACHIEVEMENTS:
 done.append(key); a=ACHIEVEMENTS[key]
-add_news(f’🏅実績解除: {a[“icon”]}{a[“name”]} — {a[“desc”]}’,‘club’)
+add_news(f’🏅実績解除: {a[“icon”]}{a[“name”]} - {a[“desc”]}’,‘club’)
 
 # =========================================================
 
